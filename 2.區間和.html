@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>區間和：觀念與經典題型 (直觀版)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .transition-all-500 { transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+        .grid-cell {
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; font-family: monospace;
+            border-radius: 0.5rem; border-width: 2px;
+            transition: all 0.3s;
+        }
+        .anim-fade-up { animation: fadeUp 0.5s forwards; opacity: 0; transform: translateY(10px); }
+        @keyframes fadeUp { to { opacity: 1; transform: translateY(0); } }
+        
+        /* 2D Grid Specifics */
+        .matrix-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 0.5rem;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans text-slate-800 flex flex-col">
+
+    <!-- Navigation -->
+    <nav class="bg-white border-b border-slate-200 px-4 py-4 sticky top-0 z-50 shadow-sm">
+        <div class="max-w-5xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+            <h1 class="text-xl font-bold text-slate-900 flex items-center gap-2">
+                <svg class="text-indigo-600" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16m-7 6h7"/></svg>
+                區間和 (Range Sum) 觀念演示
+            </h1>
+            <div class="flex bg-slate-100 p-1 rounded-lg">
+                <button onclick="app.switchTab('basic')" id="tab-basic" class="px-4 py-1.5 rounded-md text-sm font-bold transition-all bg-white shadow-sm text-indigo-600">基礎定義</button>
+                <button onclick="app.switchTab('equilibrium')" id="tab-equilibrium" class="px-4 py-1.5 rounded-md text-sm font-bold transition-all text-slate-500 hover:text-slate-700">題型：尋找平衡點</button>
+                <button onclick="app.switchTab('2d')" id="tab-2d" class="px-4 py-1.5 rounded-md text-sm font-bold transition-all text-slate-500 hover:text-slate-700">題型：2D 矩陣和</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-grow p-4 md:p-8 max-w-5xl mx-auto w-full space-y-6">
+
+        <!-- TAB 1: BASIC CONCEPT -->
+        <section id="view-basic" class="space-y-6">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <h2 class="text-lg font-bold text-slate-800 mb-2 border-l-4 border-indigo-500 pl-3">什麼是區間和 (Range Sum)？</h2>
+                <p class="text-slate-600 text-sm mb-4">
+                    最基礎的定義：計算數列中從位置 <code class="bg-slate-100 px-1 rounded">L</code> 到位置 <code class="bg-slate-100 px-1 rounded">R</code> 之間所有數字的總和。
+                </p>
+                <div class="bg-indigo-50 p-4 rounded-xl border border-indigo-100 flex flex-col md:flex-row gap-4 items-center justify-between">
+                    <div class="font-mono text-sm md:text-base text-indigo-900">
+                        <div class="mb-1">目標：計算 Sum(L, R)</div>
+                        <div class="font-bold">方式：A[L] + A[L+1] + ... + A[R]</div>
+                    </div>
+                    <button onclick="app.animBasic()" class="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-md transition-transform active:scale-95">
+                        演示累加過程
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-2xl shadow-md border border-slate-200 min-h-[200px] flex flex-col justify-center gap-8">
+                <div>
+                    <div class="text-xs font-bold text-slate-400 uppercase mb-4 text-center">原始數列 A[]</div>
+                    <div id="basic-arr-a" class="flex flex-wrap gap-2 justify-center"></div>
+                </div>
+                <div class="text-center">
+                    <div id="basic-log" class="text-slate-500 font-mono text-lg font-medium">點擊按鈕開始計算區間 [2, 4] 的總和</div>
+                    <div id="basic-sum-display" class="mt-2 text-3xl font-bold text-indigo-600 opacity-0 transition-opacity">總和: 0</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: EQUILIBRIUM INDEX -->
+        <section id="view-equilibrium" class="hidden space-y-6">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <h2 class="text-lg font-bold text-slate-800 mb-2 border-l-4 border-amber-500 pl-3">題型一：尋找數列平衡點 (Pivot Index)</h2>
+                <p class="text-slate-600 text-sm mb-4">
+                    <span class="font-bold">題目：</span>找到一個索引 `i`，使得該位置<span class="text-blue-600 font-bold">左邊所有數字的和</span>等於<span class="text-amber-600 font-bold">右邊所有數字的和</span>。<br>
+                    <span class="font-bold">直觀解法：</span>對於每個位置，分別把左邊加起來、右邊加起來，然後比較兩者是否相等。
+                </p>
+            </div>
+
+            <div class="grid md:grid-cols-3 gap-6">
+                <div class="md:col-span-2 bg-white p-6 rounded-2xl shadow-md border border-slate-200 min-h-[300px] flex flex-col justify-center gap-6">
+                    <div id="eq-arr" class="flex flex-wrap gap-2 justify-center"></div>
+                    
+                    <div class="flex justify-center gap-8 text-center">
+                        <div class="bg-blue-50 p-3 rounded-lg w-32 border border-blue-200 transition-all duration-300" id="box-left">
+                            <div class="text-xs text-blue-400 font-bold uppercase">左邊區間和</div>
+                            <div id="eq-left-val" class="text-2xl font-bold text-blue-600">-</div>
+                        </div>
+                        <div class="flex items-center text-slate-300">
+                            <svg id="eq-icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h14"/><path d="M2 10h18"/><path d="m19 22-5-5-4 5"/><path d="m19 10-5 5-4-5"/><path d="M11 15V2"/></svg>
+                        </div>
+                        <div class="bg-amber-50 p-3 rounded-lg w-32 border border-amber-200 transition-all duration-300" id="box-right">
+                            <div class="text-xs text-amber-400 font-bold uppercase">右邊區間和</div>
+                            <div id="eq-right-val" class="text-2xl font-bold text-amber-600">-</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col items-center justify-center gap-4">
+                    <button onclick="app.animEquilibrium()" class="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold shadow-md transition-all">
+                        開始尋找
+                    </button>
+                    <div id="eq-result" class="text-center font-bold text-slate-400">
+                        點擊開始演示
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: 2D MATRIX -->
+        <section id="view-2d" class="hidden space-y-6">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <h2 class="text-lg font-bold text-slate-800 mb-2 border-l-4 border-pink-500 pl-3">題型二：二維矩陣區間和 (2D Range Sum)</h2>
+                <p class="text-slate-600 text-sm mb-4">
+                    <span class="font-bold">題目：</span>在矩陣中計算任意矩形區域 <code class="bg-slate-100 px-1 rounded">(r1, c1) ~ (r2, c2)</code> 內所有數字的總和。<br>
+                    <span class="font-bold">直觀解法：</span>直接遍歷矩形範圍內的每一個格子，將數值逐一累加。
+                </p>
+            </div>
+
+            <div class="grid lg:grid-cols-2 gap-6">
+                <!-- Matrix Visual -->
+                <div class="bg-white p-6 rounded-2xl shadow-md border border-slate-200 flex flex-col items-center justify-center min-h-[350px]">
+                    <div class="mb-4 text-xs font-bold text-slate-400 uppercase flex justify-between w-full max-w-[300px]">
+                        <span>原始矩陣 Matrix[][]</span>
+                        <span class="text-slate-300">5x5 Grid</span>
+                    </div>
+                    <div id="matrix-container" class="matrix-grid w-full max-w-[300px]"></div>
+                </div>
+
+                <!-- Explanation / Controls -->
+                <div class="flex flex-col gap-4">
+                    <div class="bg-slate-800 p-5 rounded-2xl text-white shadow-lg flex-grow flex flex-col justify-center">
+                        <div class="text-xs font-bold text-slate-400 uppercase mb-4">累加過程</div>
+                        <div id="2d-log" class="space-y-2 font-mono text-sm h-32 overflow-y-auto pr-2">
+                            <div class="text-slate-500 italic">點擊下方按鈕演示...</div>
+                        </div>
+                        <div class="mt-6 pt-4 border-t border-slate-700 flex justify-between items-center">
+                            <span class="text-slate-400">目前總和:</span>
+                            <span id="2d-result" class="text-3xl font-bold text-pink-400">0</span>
+                        </div>
+                    </div>
+
+                    <button onclick="app.anim2D()" class="w-full py-3 bg-pink-600 hover:bg-pink-700 text-white rounded-xl font-bold shadow-md transition-all">
+                        演示直接累加 (3,3) 到 (4,4)
+                    </button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        const app = {
+            // Data
+            basicData: [10, 20, 30, 40, 50, 60],
+            eqData: [1, 7, 3, 6, 5, 6], // Pivot is index 3 (value 6). Left: 1+7+3=11, Right: 5+6=11
+            // Simple random matrix 5x5
+            matrixData: Array.from({length: 25}, () => Math.floor(Math.random() * 5) + 1), 
+            
+            // State
+            currentTab: 'basic',
+            isAnimating: false,
+
+            init() {
+                this.renderBasic();
+                this.renderEquilibrium();
+                this.renderMatrix();
+            },
+
+            switchTab(tab) {
+                if (this.isAnimating) return;
+                
+                // Update Buttons
+                ['basic', 'equilibrium', '2d'].forEach(t => {
+                    const btn = document.getElementById(`tab-${t}`);
+                    const view = document.getElementById(`view-${t}`);
+                    if (t === tab) {
+                        btn.className = "px-4 py-1.5 rounded-md text-sm font-bold transition-all bg-white shadow-sm text-indigo-600";
+                        view.classList.remove('hidden');
+                        view.classList.add('anim-fade-up');
+                    } else {
+                        btn.className = "px-4 py-1.5 rounded-md text-sm font-bold transition-all text-slate-500 hover:text-slate-700";
+                        view.classList.add('hidden');
+                        view.classList.remove('anim-fade-up');
+                    }
+                });
+                this.currentTab = tab;
+            },
+
+            wait(ms) { return new Promise(r => setTimeout(r, ms)); },
+
+            // --- Basic Logic (Direct Summation) ---
+            renderBasic() {
+                const aContainer = document.getElementById('basic-arr-a');
+                aContainer.innerHTML = this.basicData.map((v, i) => 
+                    `<div class="flex flex-col items-center gap-1">
+                        <div class="text-[10px] text-slate-300">${i}</div>
+                        <div class="grid-cell w-12 h-12 md:w-14 md:h-14 bg-white border-slate-200 text-slate-600 text-lg">${v}</div>
+                    </div>`
+                ).join('');
+                document.getElementById('basic-sum-display').style.opacity = '0';
+                document.getElementById('basic-log').innerText = "點擊按鈕開始計算區間 [2, 4] 的總和";
+            },
+
+            async animBasic() {
+                if (this.isAnimating) return;
+                this.isAnimating = true;
+                this.renderBasic(); // Reset visuals
+                
+                const cells = document.getElementById('basic-arr-a').children;
+                const log = document.getElementById('basic-log');
+                const sumDisplay = document.getElementById('basic-sum-display');
+                
+                // Target Range [2, 4]
+                const L = 2, R = 4;
+                let currentSum = 0;
+                
+                sumDisplay.style.opacity = '1';
+
+                for (let i = L; i <= R; i++) {
+                    const cellBox = cells[i].querySelector('.grid-cell');
+                    const val = this.basicData[i];
+                    
+                    // Highlight
+                    cellBox.classList.remove('bg-white', 'border-slate-200', 'text-slate-600');
+                    cellBox.classList.add('bg-indigo-500', 'border-indigo-600', 'text-white', 'scale-110');
+                    
+                    currentSum += val;
+                    log.innerHTML = `正在累加索引 ${i} (數值 ${val})...`;
+                    sumDisplay.innerText = `總和: ${currentSum}`;
+                    
+                    await this.wait(800);
+                    
+                    // Slightly dim but keep highlighted to show it's part of the range
+                    cellBox.classList.remove('scale-110');
+                    cellBox.classList.add('opacity-90');
+                }
+
+                log.innerHTML = `<span class="text-green-600 font-bold">計算完成！區間 [${L}, ${R}] 的總和為 ${currentSum}</span>`;
+                this.isAnimating = false;
+            },
+
+            // --- Equilibrium Logic (Split Summation) ---
+            renderEquilibrium() {
+                const container = document.getElementById('eq-arr');
+                container.innerHTML = this.eqData.map((v, i) => 
+                    `<div class="flex flex-col items-center gap-1">
+                        <div class="text-[10px] text-slate-300">${i}</div>
+                        <div class="grid-cell w-10 h-10 bg-white border-slate-200 text-slate-600">${v}</div>
+                    </div>`
+                ).join('');
+                document.getElementById('eq-left-val').innerText = '-';
+                document.getElementById('eq-right-val').innerText = '-';
+                document.getElementById('eq-result').innerText = '準備開始';
+                document.getElementById('eq-result').className = 'text-center font-bold text-slate-400';
+                document.getElementById('eq-icon').classList.remove('text-green-500');
+                
+                // Reset boxes
+                document.getElementById('box-left').className = "bg-blue-50 p-3 rounded-lg w-32 border border-blue-200 transition-all duration-300";
+                document.getElementById('box-right').className = "bg-amber-50 p-3 rounded-lg w-32 border border-amber-200 transition-all duration-300";
+            },
+
+            async animEquilibrium() {
+                if (this.isAnimating) return;
+                this.isAnimating = true;
+                this.renderEquilibrium();
+
+                const cells = document.getElementById('eq-arr').children;
+                const resText = document.getElementById('eq-result');
+
+                for (let pivot = 0; pivot < this.eqData.length; pivot++) {
+                    
+                    // 1. Highlight Pivot
+                    const pivotCell = cells[pivot].querySelector('.grid-cell');
+                    pivotCell.classList.add('bg-purple-600', 'text-white', 'scale-110', 'z-10');
+                    resText.innerText = `檢查索引 ${pivot} 是否為平衡點...`;
+                    
+                    // 2. Calculate Left Sum (Direct Loop)
+                    let leftSum = 0;
+                    document.getElementById('box-left').classList.add('ring-2', 'ring-blue-400');
+                    for (let l = 0; l < pivot; l++) {
+                        const lCell = cells[l].querySelector('.grid-cell');
+                        lCell.classList.add('bg-blue-100', 'border-blue-300', 'text-blue-700');
+                        leftSum += this.eqData[l];
+                        document.getElementById('eq-left-val').innerText = leftSum;
+                        await this.wait(200); // Fast summation
+                    }
+                    document.getElementById('box-left').classList.remove('ring-2', 'ring-blue-400');
+                    
+                    // 3. Calculate Right Sum (Direct Loop)
+                    let rightSum = 0;
+                    document.getElementById('box-right').classList.add('ring-2', 'ring-amber-400');
+                    for (let r = pivot + 1; r < this.eqData.length; r++) {
+                        const rCell = cells[r].querySelector('.grid-cell');
+                        rCell.classList.add('bg-amber-100', 'border-amber-300', 'text-amber-700');
+                        rightSum += this.eqData[r];
+                        document.getElementById('eq-right-val').innerText = rightSum;
+                        await this.wait(200); // Fast summation
+                    }
+                    document.getElementById('box-right').classList.remove('ring-2', 'ring-amber-400');
+
+                    await this.wait(500);
+
+                    // 4. Compare
+                    if (leftSum === rightSum) {
+                        resText.innerHTML = `找到平衡點！索引 <span class="text-purple-600 text-xl">${pivot}</span>`;
+                        resText.className = "text-center font-bold text-green-600 animate-bounce";
+                        document.getElementById('eq-icon').classList.add('text-green-500');
+                        this.isAnimating = false;
+                        return;
+                    }
+
+                    // Reset visuals for next iteration
+                    resText.innerText = `左(${leftSum}) ≠ 右(${rightSum})，繼續下一個...`;
+                    pivotCell.classList.remove('bg-purple-600', 'text-white', 'scale-110', 'z-10');
+                    for(let i=0; i<this.eqData.length; i++) {
+                        const c = cells[i].querySelector('.grid-cell');
+                        c.className = "grid-cell w-10 h-10 bg-white border-slate-200 text-slate-600"; // Hard reset classes
+                    }
+                    document.getElementById('eq-left-val').innerText = '-';
+                    document.getElementById('eq-right-val').innerText = '-';
+                    await this.wait(500);
+                }
+
+                resText.innerText = "未找到平衡點";
+                this.isAnimating = false;
+            },
+
+            // --- 2D Matrix Logic (Direct Summation) ---
+            renderMatrix() {
+                const container = document.getElementById('matrix-container');
+                container.innerHTML = '';
+                // Indices for 2D visual: (r, c)
+                for(let r=0; r<5; r++) {
+                    for(let c=0; c<5; c++) {
+                        const div = document.createElement('div');
+                        const idx = r*5 + c;
+                        div.className = 'grid-cell w-full aspect-square text-xs md:text-sm bg-white border-slate-200 text-slate-400 transition-colors duration-200';
+                        div.innerText = this.matrixData[idx];
+                        div.dataset.r = r;
+                        div.dataset.c = c;
+                        container.appendChild(div);
+                    }
+                }
+                document.getElementById('2d-log').innerHTML = '<div class="text-slate-500 italic">點擊下方按鈕演示...</div>';
+                document.getElementById('2d-result').innerText = '0';
+            },
+
+            async anim2D() {
+                if (this.isAnimating) return;
+                this.isAnimating = true;
+                this.renderMatrix(); // Reset
+                
+                // Target: Indices (2,2) to (3,3) which visually is 3,3 to 4,4 in 1-based logic
+                const r1=2, c1=2, r2=3, c2=3; 
+                
+                const cells = Array.from(document.getElementById('matrix-container').children);
+                const getCell = (r, c) => cells.find(el => parseInt(el.dataset.r) === r && parseInt(el.dataset.c) === c);
+                const log = document.getElementById('2d-log');
+                const resDisplay = document.getElementById('2d-result');
+                
+                let totalSum = 0;
+                log.innerHTML = '';
+
+                // Nested Loop Animation
+                for(let r = r1; r <= r2; r++) {
+                    for(let c = c1; c <= c2; c++) {
+                        const el = getCell(r, c);
+                        const val = parseInt(el.innerText);
+                        
+                        // Highlight Active Cell
+                        el.classList.remove('bg-white', 'text-slate-400', 'border-slate-200');
+                        el.classList.add('bg-pink-500', 'text-white', 'border-pink-600', 'scale-110', 'shadow-lg', 'z-10');
+                        
+                        totalSum += val;
+                        
+                        // Log update
+                        const logEntry = document.createElement('div');
+                        logEntry.className = "mb-1 text-pink-300";
+                        logEntry.innerText = `+ 加總位置 (${r},${c}): 值 ${val}`;
+                        log.appendChild(logEntry);
+                        log.scrollTop = log.scrollHeight;
+                        
+                        resDisplay.innerText = totalSum;
+
+                        await this.wait(600);
+                        
+                        // Mark as Processed (Pink tint)
+                        el.classList.remove('scale-110', 'shadow-lg', 'z-10');
+                        el.classList.add('opacity-80');
+                    }
+                }
+
+                const completeMsg = document.createElement('div');
+                completeMsg.className = "mt-2 pt-2 border-t border-slate-600 font-bold text-white";
+                completeMsg.innerText = `完成！矩形區域總和為 ${totalSum}`;
+                log.appendChild(completeMsg);
+                log.scrollTop = log.scrollHeight;
+                
+                this.isAnimating = false;
+            }
+        };
+
+        app.init();
+    </script>
+</body>
+</html>

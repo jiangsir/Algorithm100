@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>時間複雜度 (Time Complexity) 視覺化</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 基礎動畫設定 */
+        .cell {
+            transition: all 0.2s ease;
+        }
+        .cell.active {
+            transform: scale(1.1);
+            box-shadow: 0 0 10px rgba(99, 102, 241, 0.5); /* indigo-500 */
+        }
+        
+        /* 為了讓格線在 N 較大時也能保持美觀 */
+        .grid-container {
+            display: grid;
+            gap: 0.25rem;
+            max-width: 100%;
+            margin: 0 auto;
+        }
+
+        input[type=range] {
+            -webkit-appearance: none; 
+            background: transparent; 
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #4f46e5;
+            cursor: pointer;
+            margin-top: -8px; 
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #e2e8f0;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans text-slate-800 flex flex-col">
+
+    <!-- Navbar -->
+    <nav class="bg-white border-b border-slate-200 px-6 py-4 shadow-sm">
+        <div class="max-w-5xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-4">
+                <a href="index.html" class="inline-flex items-center gap-2 px-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors text-sm font-medium text-slate-700">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                    首頁
+                </a>
+                <div>
+                    <h1 class="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                        <svg class="text-indigo-600" xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        時間複雜度視覺化
+                    </h1>
+                    <p class="text-sm text-slate-500">Big O Notation Visualizer</p>
+                </div>
+            </div>
+            
+            <!-- Complexity Selectors -->
+            <div class="flex bg-slate-100 p-1 rounded-lg gap-1">
+                <button onclick="app.setComplexity('O(1)')" class="algo-btn px-4 py-2 rounded-md text-sm font-semibold transition-all hover:bg-white hover:shadow-sm text-slate-600" data-algo="O(1)">O(1)</button>
+                <button onclick="app.setComplexity('O(log N)')" class="algo-btn px-4 py-2 rounded-md text-sm font-semibold transition-all hover:bg-white hover:shadow-sm text-slate-600" data-algo="O(log N)">O(log N)</button>
+                <button onclick="app.setComplexity('O(N)')" class="algo-btn px-4 py-2 rounded-md text-sm font-semibold transition-all hover:bg-white hover:shadow-sm text-slate-600" data-algo="O(N)">O(N)</button>
+                <button onclick="app.setComplexity('O(N^2)')" class="algo-btn px-4 py-2 rounded-md text-sm font-semibold transition-all hover:bg-white hover:shadow-sm text-slate-600" data-algo="O(N^2)">O(N²)</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="flex-grow p-4 md:p-8 max-w-5xl mx-auto w-full space-y-8">
+        
+        <!-- Controls & Info -->
+        <div class="grid md:grid-cols-3 gap-6">
+            
+            <!-- Left: Settings -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
+                <div>
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="font-bold text-slate-700">資料量 (N)</label>
+                        <span id="n-display" class="font-mono bg-slate-100 px-2 py-1 rounded text-indigo-600 font-bold">10</span>
+                    </div>
+                    <input type="range" id="n-slider" min="1" max="20" value="10" 
+                        class="w-full accent-indigo-600" oninput="app.updateN(this.value)">
+                    <p class="text-xs text-slate-400 mt-2">拖動滑桿改變 N 的大小</p>
+                </div>
+
+                <div class="pt-4 border-t border-slate-100">
+                    <button id="run-btn" onclick="app.runAnimation()" 
+                        class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-md shadow-indigo-200 transition-all active:scale-95 flex justify-center items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        執行運算
+                    </button>
+                    <button id="stop-btn" onclick="app.stopAnimation()" class="hidden w-full py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold shadow-md shadow-red-200 transition-all active:scale-95">
+                        停止
+                    </button>
+                </div>
+
+                <div class="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                    <div class="text-xs text-slate-500 uppercase font-bold tracking-wider mb-1">總步驟數 (Steps)</div>
+                    <div id="step-counter" class="text-3xl font-mono font-bold text-slate-800">0</div>
+                </div>
+            </div>
+
+            <!-- Right: Description -->
+            <div class="md:col-span-2 bg-indigo-900 text-white p-6 rounded-2xl shadow-lg relative overflow-hidden flex flex-col justify-center">
+                <div class="absolute top-0 right-0 p-6 opacity-10">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                </div>
+                
+                <div class="relative z-10">
+                    <h2 id="algo-title" class="text-2xl font-bold mb-2 text-indigo-300">O(1) - 常數時間</h2>
+                    <p id="algo-desc" class="text-indigo-100 leading-relaxed text-lg">
+                        無論資料有多少 (N)，執行時間都固定。就像在一個陣列中直接用索引拿取資料，一步到位。
+                    </p>
+                    <div class="mt-4 pt-4 border-t border-indigo-700/50 flex gap-4 text-sm text-indigo-300 font-mono">
+                        <span id="formula-display">Steps ≈ 1</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Visualization Area -->
+        <div class="bg-white rounded-2xl shadow-xl p-6 md:p-8 border border-slate-200 min-h-[300px] flex flex-col items-center justify-center relative">
+            
+            <div id="grid-label" class="absolute top-4 left-6 text-sm font-bold text-slate-400 uppercase tracking-wider">
+                資料結構視圖
+            </div>
+
+            <!-- Grid Container -->
+            <div id="visual-container" class="grid-container transition-all duration-300">
+                <!-- Cells will be injected here -->
+            </div>
+
+            <div id="status-msg" class="mt-8 text-slate-500 font-medium opacity-0 transition-opacity">
+                準備就緒
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        const app = {
+            n: 10,
+            algo: 'O(1)', // 'O(1)', 'O(log N)', 'O(N)', 'O(N^2)'
+            isRunning: false,
+            timer: null,
+            steps: 0,
+            cells: [],
+
+            // Data descriptions
+            descriptions: {
+                'O(1)': {
+                    title: 'O(1) - 常數時間 (Constant Time)',
+                    desc: '最理想的狀況。無論資料量 N 是 10 還是 1000 萬，程式都只需要執行固定次數（通常是 1 次）的操作。例如：陣列索引存取、雜湊表 (Hash Map) 查詢。',
+                    formula: 'Steps = 1'
+                },
+                'O(log N)': {
+                    title: 'O(log N) - 對數時間 (Logarithmic Time)',
+                    desc: '非常高效。每次操作都能排除掉一半的資料。常見於「二分搜尋法」(Binary Search)。當 N 翻倍時，步驟數只會增加 1。',
+                    formula: 'Steps ≈ log2(N)'
+                },
+                'O(N)': {
+                    title: 'O(N) - 線性時間 (Linear Time)',
+                    desc: '步驟數與資料量 N 成正比。如果你需要檢查陣列中的每一個元素（例如搜尋一個未排序的清單），就是 O(N)。',
+                    formula: 'Steps = N'
+                },
+                'O(N^2)': {
+                    title: 'O(N²) - 平方時間 (Quadratic Time)',
+                    desc: '效率較差。通常出現在「雙重迴圈」中，例如氣泡排序法。當 N 變大時，運算量會爆炸性增長（N=10 時 100 次，N=100 時 10000 次！）。',
+                    formula: 'Steps = N × N'
+                }
+            },
+
+            init() {
+                this.cacheDOM();
+                this.updateN(10);
+                this.setComplexity('O(N)'); // Default
+            },
+
+            cacheDOM() {
+                this.dom = {
+                    container: document.getElementById('visual-container'),
+                    nDisplay: document.getElementById('n-display'),
+                    nSlider: document.getElementById('n-slider'),
+                    stepCounter: document.getElementById('step-counter'),
+                    runBtn: document.getElementById('run-btn'),
+                    stopBtn: document.getElementById('stop-btn'),
+                    algoTitle: document.getElementById('algo-title'),
+                    algoDesc: document.getElementById('algo-desc'),
+                    formulaDisplay: document.getElementById('formula-display'),
+                    statusMsg: document.getElementById('status-msg'),
+                    algoBtns: document.querySelectorAll('.algo-btn')
+                };
+            },
+
+            updateN(val) {
+                if (this.isRunning) this.stopAnimation();
+                this.n = parseInt(val);
+                this.dom.nDisplay.textContent = this.n;
+                this.renderGrid();
+                this.resetStats();
+            },
+
+            setComplexity(type) {
+                if (this.isRunning) this.stopAnimation();
+                this.algo = type;
+                
+                // Update UI Buttons
+                this.dom.algoBtns.forEach(btn => {
+                    if (btn.dataset.algo === type) {
+                        btn.classList.add('bg-indigo-600', 'text-white', 'shadow-md');
+                        btn.classList.remove('bg-white', 'text-slate-600');
+                    } else {
+                        btn.classList.remove('bg-indigo-600', 'text-white', 'shadow-md');
+                        btn.classList.add('text-slate-600');
+                    }
+                });
+
+                // Update Text Info
+                const info = this.descriptions[type];
+                this.dom.algoTitle.textContent = info.title;
+                this.dom.algoDesc.textContent = info.desc;
+                this.dom.formulaDisplay.textContent = info.formula;
+
+                this.renderGrid();
+                this.resetStats();
+            },
+
+            renderGrid() {
+                this.dom.container.innerHTML = '';
+                this.cells = [];
+                
+                // Grid layout config
+                let cols = this.n;
+                let totalCells = this.n;
+
+                if (this.algo === 'O(N^2)') {
+                    // For N^2, we show a square grid
+                    this.dom.container.style.gridTemplateColumns = `repeat(${this.n}, 1fr)`;
+                    totalCells = this.n * this.n;
+                } else {
+                    // For others, we show a single row (flex-like grid)
+                    // But to make it look nice if N is large, maybe wrap? 
+                    // Let's stick to max-width row logic or wrapping grid.
+                    // Let's use auto-fit for linear to look like a collection
+                    this.dom.container.style.gridTemplateColumns = `repeat(auto-fit, minmax(30px, 1fr))`;
+                    // Actually, to strictly show linear, 1 row is best, but wrapping is fine for visual
+                    // Let's force a visually linear look but wrapped
+                    this.dom.container.style.gridTemplateColumns = `repeat(${Math.min(this.n, 10)}, 1fr)`;
+                }
+
+                for (let i = 0; i < totalCells; i++) {
+                    const cell = document.createElement('div');
+                    // Style depends on N size to fit
+                    const sizeClass = this.n > 15 && this.algo === 'O(N^2)' ? 'h-4 w-4 text-[0px]' : 'h-8 w-8 md:h-10 md:w-10 text-xs md:text-sm';
+                    
+                    cell.className = `cell ${sizeClass} bg-slate-200 rounded md:rounded-lg flex items-center justify-center font-mono text-slate-500 select-none`;
+                    
+                    // Show numbers only for linear modes or small N^2
+                    if (this.algo !== 'O(N^2)') {
+                        cell.textContent = i;
+                    } else if (this.n <= 5) {
+                         // Optional: coordinates for small N^2
+                    }
+
+                    this.dom.container.appendChild(cell);
+                    this.cells.push(cell);
+                }
+            },
+
+            resetStats() {
+                this.steps = 0;
+                this.dom.stepCounter.textContent = '0';
+                this.dom.statusMsg.style.opacity = '0';
+                this.cells.forEach(c => {
+                    c.classList.remove('bg-indigo-500', 'text-white', 'active', 'bg-green-500', 'bg-slate-300');
+                    c.classList.add('bg-slate-200', 'text-slate-500');
+                });
+            },
+
+            async runAnimation() {
+                if (this.isRunning) return;
+                this.resetStats();
+                this.isRunning = true;
+                this.toggleControls(true);
+                this.dom.statusMsg.textContent = '運算中...';
+                this.dom.statusMsg.style.opacity = '1';
+
+                const delay = this.getDelay();
+
+                if (this.algo === 'O(1)') {
+                    await this.animateO1(delay);
+                } else if (this.algo === 'O(N)') {
+                    await this.animateON(delay);
+                } else if (this.algo === 'O(log N)') {
+                    await this.animateLogN(delay);
+                } else if (this.algo === 'O(N^2)') {
+                    await this.animateN2(delay);
+                }
+
+                this.finishAnimation();
+            },
+
+            toggleControls(running) {
+                if (running) {
+                    this.dom.runBtn.classList.add('hidden');
+                    this.dom.stopBtn.classList.remove('hidden');
+                    this.dom.nSlider.disabled = true;
+                } else {
+                    this.dom.runBtn.classList.remove('hidden');
+                    this.dom.stopBtn.classList.add('hidden');
+                    this.dom.nSlider.disabled = false;
+                }
+            },
+
+            stopAnimation() {
+                this.isRunning = false;
+                // Timeout clearing is handled by the loops checking isRunning
+                this.toggleControls(false);
+                this.dom.statusMsg.textContent = '已停止';
+            },
+
+            finishAnimation() {
+                if (!this.isRunning) return; // Stopped manually
+                this.isRunning = false;
+                this.toggleControls(false);
+                this.dom.statusMsg.textContent = '運算完成';
+                this.dom.statusMsg.className = "mt-8 text-green-600 font-bold transition-opacity";
+            },
+
+            getDelay() {
+                // Adjust speed based on N and Complexity to keep animation reasonable
+                if (this.algo === 'O(N^2)') {
+                    // Faster for N^2
+                    return Math.max(10, 500 / (this.n * this.n)); 
+                }
+                return 300; // Standard speed
+            },
+
+            wait(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms));
+            },
+
+            updateStep(count) {
+                this.steps = count;
+                this.dom.stepCounter.textContent = this.steps;
+            },
+
+            // --- Algorithms ---
+
+            async animateO1(delay) {
+                // Random access
+                await this.wait(300);
+                const targetIdx = Math.floor(Math.random() * this.n);
+                
+                if (!this.isRunning) return;
+                this.highlight(targetIdx, 'active');
+                this.updateStep(1);
+                
+                await this.wait(delay);
+                this.highlight(targetIdx, 'done');
+            },
+
+            async animateON(delay) {
+                for (let i = 0; i < this.n; i++) {
+                    if (!this.isRunning) break;
+                    
+                    this.highlight(i, 'active');
+                    this.updateStep(i + 1);
+                    await this.wait(Math.max(50, 1000/this.n)); // Faster as N grows
+                    
+                    this.highlight(i, 'visited');
+                }
+                // Mark last one as done or all as done? Let's mark all visited
+            },
+
+            async animateN2(delay) {
+                let count = 0;
+                for (let i = 0; i < this.n; i++) {
+                    for (let j = 0; j < this.n; j++) {
+                        if (!this.isRunning) break;
+                        
+                        const idx = i * this.n + j;
+                        this.highlight(idx, 'active');
+                        count++;
+                        this.updateStep(count);
+                        
+                        // Very fast wait for inner loop
+                        await this.wait(delay);
+                        this.highlight(idx, 'visited');
+                    }
+                    if (!this.isRunning) break;
+                }
+            },
+
+            async animateLogN(delay) {
+                // Simulate Binary Search
+                let left = 0;
+                let right = this.n - 1;
+                let target = Math.floor(Math.random() * this.n); // Random target
+                
+                // Mark target visually (optional, or just search logic)
+                this.cells[target].classList.add('border-2', 'border-indigo-600'); // Hint target
+
+                let count = 0;
+                
+                while (left <= right) {
+                    if (!this.isRunning) break;
+                    
+                    count++;
+                    this.updateStep(count);
+                    
+                    let mid = Math.floor((left + right) / 2);
+                    
+                    // Highlight Range
+                    for(let i=0; i<this.n; i++) {
+                        if(i >= left && i <= right) this.cells[i].classList.add('bg-indigo-100');
+                        else this.cells[i].classList.remove('bg-indigo-100');
+                    }
+
+                    this.highlight(mid, 'active');
+                    await this.wait(800);
+
+                    if (mid === target) {
+                        this.highlight(mid, 'done');
+                        break;
+                    } else if (mid < target) {
+                        // Discard left half
+                        for(let i=left; i<=mid; i++) this.highlight(i, 'discard');
+                        left = mid + 1;
+                    } else {
+                        // Discard right half
+                        for(let i=mid; i<=right; i++) this.highlight(i, 'discard');
+                        right = mid - 1;
+                    }
+                    await this.wait(400);
+                }
+            },
+
+            highlight(idx, state) {
+                if (!this.cells[idx]) return;
+                const el = this.cells[idx];
+                
+                // Reset basic active states
+                el.classList.remove('active', 'bg-indigo-500', 'text-white');
+
+                if (state === 'active') {
+                    el.classList.add('active', 'bg-indigo-500', 'text-white');
+                } else if (state === 'visited') {
+                    el.classList.add('bg-slate-300', 'text-slate-600');
+                } else if (state === 'done') {
+                    el.classList.add('bg-green-500', 'text-white', 'shadow-lg');
+                } else if (state === 'discard') {
+                    el.classList.add('opacity-30', 'scale-90');
+                }
+            }
+        };
+
+        app.init();
+    </script>
+</body>
+</html>

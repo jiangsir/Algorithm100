@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>二維前綴和完全攻略</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .grid-cell {
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; font-family: monospace;
+            border-radius: 0.375rem; border-width: 2px;
+            transition: all 0.3s;
+            aspect-ratio: 1;
+        }
+        .anim-fade { animation: fadeIn 0.4s forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .matrix-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr); 
+            gap: 0.25rem;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans text-slate-800 flex flex-col">
+
+    <nav class="bg-white border-b border-slate-200 px-6 py-4 sticky top-0 z-50 shadow-sm">
+        <div class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+            <h1 class="text-xl font-bold text-slate-900 flex items-center gap-2">
+                <svg class="text-pink-600" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><line x1="3" x2="21" y1="9" y2="9"/><line x1="9" x2="9" y1="21" y2="9"/></svg>
+                二維前綴和 (2D Prefix Sum)
+            </h1>
+            <div class="flex bg-slate-100 p-1 rounded-lg">
+                <button onclick="app.setTab(1)" id="tab-1" class="px-4 py-1.5 rounded-md text-sm font-bold transition-all bg-white shadow-sm text-pink-600">1. 建構原理</button>
+                <button onclick="app.setTab(2)" id="tab-2" class="px-4 py-1.5 rounded-md text-sm font-bold transition-all text-slate-500 hover:text-slate-700">2. 格子意義</button>
+                <button onclick="app.setTab(3)" id="tab-3" class="px-4 py-1.5 rounded-md text-sm font-bold transition-all text-slate-500 hover:text-slate-700">3. 區間和應用</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="flex-grow p-4 md:p-8 max-w-6xl mx-auto w-full space-y-6">
+
+        <!-- TAB 1: CONSTRUCTION -->
+        <section id="view-1" class="space-y-6 anim-fade">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <h2 class="text-lg font-bold text-slate-800 mb-2 border-l-4 border-pink-500 pl-3">階段一：如何建立前綴和矩陣？</h2>
+                <p class="text-slate-600 text-sm mb-4 leading-relaxed">
+                    我們要從原始矩陣 <code class="bg-slate-100 px-1 rounded">A</code> 算出前綴和矩陣 <code class="bg-slate-100 px-1 rounded">P</code>。<br>
+                    核心公式：<code class="bg-pink-50 text-pink-700 px-2 py-0.5 rounded font-bold">P[i][j] = A[i][j] + P[i-1][j] + P[i][j-1] - P[i-1][j-1]</code><br>
+                    <span class="text-xs text-slate-400">(加上方，加左方，減去重複加的左上方)</span>
+                </p>
+                <button onclick="app.animBuild()" class="px-6 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-bold shadow-md transition-all">
+                    演示建構過程
+                </button>
+            </div>
+
+            <div class="grid lg:grid-cols-2 gap-8">
+                <!-- Original A -->
+                <div class="flex flex-col items-center bg-white p-6 rounded-2xl shadow-md border border-slate-200">
+                    <div class="mb-4 font-bold text-slate-400 text-xs uppercase w-full max-w-[300px]">原始矩陣 A[i][j]</div>
+                    <div id="grid-a" class="matrix-grid w-full max-w-[300px]"></div>
+                </div>
+                
+                <!-- Prefix P -->
+                <div class="flex flex-col items-center bg-white p-6 rounded-2xl shadow-md border border-slate-200 relative">
+                    <div class="mb-4 font-bold text-slate-400 text-xs uppercase w-full max-w-[300px]">前綴和矩陣 P[i][j]</div>
+                    <div id="grid-p-build" class="matrix-grid w-full max-w-[300px]"></div>
+                    
+                    <!-- Formula Overlay -->
+                    <div id="build-tooltip" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-slate-800 text-white text-xs p-3 rounded-lg shadow-xl opacity-0 transition-opacity pointer-events-none z-10 w-48 text-center">
+                        <div class="mb-1 text-slate-400">計算 P[<span id="tt-r"></span>][<span id="tt-c"></span>]</div>
+                        <div class="font-mono font-bold text-lg text-pink-400" id="tt-val">0</div>
+                        <div class="text-[10px] text-slate-400 mt-1" id="tt-calc"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: MEANING -->
+        <section id="view-2" class="hidden space-y-6">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <h2 class="text-lg font-bold text-slate-800 mb-2 border-l-4 border-indigo-500 pl-3">階段二：每一個格子代表什麼？</h2>
+                <p class="text-slate-600 text-sm mb-0">
+                    在前綴和矩陣中，<code class="font-bold text-indigo-600">P[i][j]</code> 代表的是：<br>
+                    從左上角 <code class="bg-slate-100 px-1 rounded">(0, 0)</code> 到該點 <code class="bg-slate-100 px-1 rounded">(i, j)</code> 所圍成的<span class="font-bold text-indigo-600">矩形區域總和</span>。
+                </p>
+                <p class="text-xs text-slate-400 mt-2">
+                    * 試著將滑鼠移到（或點擊）下方的格子，看看它涵蓋了哪些範圍。
+                </p>
+            </div>
+
+            <div class="grid lg:grid-cols-2 gap-8 items-start">
+                <div class="flex flex-col items-center bg-white p-6 rounded-2xl shadow-md border border-slate-200">
+                    <div class="mb-4 font-bold text-slate-400 text-xs uppercase w-full max-w-[350px]">互動區：前綴和矩陣 P</div>
+                    <div id="grid-meaning" class="matrix-grid w-full max-w-[350px]" onmouseleave="app.clearHover()"></div>
+                </div>
+
+                <div class="bg-indigo-900 p-6 rounded-2xl shadow-xl text-white h-full flex flex-col justify-center items-center text-center">
+                    <div class="text-indigo-300 text-xs font-bold uppercase mb-2">當前選取 P[i][j]</div>
+                    <div class="text-4xl font-mono font-bold mb-4 text-white" id="meaning-coord">(?, ?)</div>
+                    <div class="w-full h-px bg-indigo-700 mb-4"></div>
+                    <div class="text-indigo-300 text-xs font-bold uppercase mb-2">區域總和</div>
+                    <div class="text-6xl font-mono font-bold text-yellow-400" id="meaning-val">-</div>
+                    <p class="mt-6 text-sm text-indigo-200 max-w-xs">
+                        這代表原始矩陣中，藍色高亮區域內所有數字的加總。
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: RANGE SUM QUERY -->
+        <section id="view-3" class="hidden space-y-6">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <h2 class="text-lg font-bold text-slate-800 mb-2 border-l-4 border-green-500 pl-3">階段三：矩陣區間和 (排容原理)</h2>
+                <p class="text-slate-600 text-sm mb-4">
+                    若要計算任意子矩形 <code class="bg-slate-100 px-1 rounded">(r1, c1) ~ (r2, c2)</code> 的總和，我們不需要重新遍歷原始矩陣。
+                    只需使用四個 P 值進行運算：
+                </p>
+                <div class="bg-slate-100 p-3 rounded-lg font-mono text-xs md:text-sm text-center text-slate-700 break-all">
+                    Sum = <span class="text-blue-600 font-bold">P[r2][c2]</span> 
+                    - <span class="text-red-500 font-bold">P[r1-1][c2]</span> 
+                    - <span class="text-red-500 font-bold">P[r2][c1-1]</span> 
+                    + <span class="text-green-600 font-bold">P[r1-1][c1-1]</span>
+                </div>
+            </div>
+
+            <div class="grid lg:grid-cols-2 gap-8">
+                <!-- Matrix -->
+                <div class="flex flex-col items-center bg-white p-6 rounded-2xl shadow-md border border-slate-200">
+                    <div class="mb-4 font-bold text-slate-400 text-xs uppercase w-full max-w-[350px]">前綴和矩陣 P</div>
+                    <div id="grid-query" class="matrix-grid w-full max-w-[350px]"></div>
+                </div>
+
+                <!-- Controls -->
+                <div class="flex flex-col gap-4">
+                    <div class="bg-slate-800 p-5 rounded-2xl text-white shadow-lg flex-grow flex flex-col min-h-[300px]">
+                        <div class="text-xs font-bold text-slate-400 uppercase mb-4">運算日誌 (詳細排容步驟)</div>
+                        <div id="query-log" class="space-y-3 font-mono text-sm overflow-y-auto flex-grow h-64 pr-2">
+                            <div class="text-slate-500 italic">點擊下方按鈕演示...</div>
+                        </div>
+                        <div class="mt-4 pt-4 border-t border-slate-700 flex justify-between items-center">
+                            <span class="text-slate-400">計算結果:</span>
+                            <span id="query-result" class="text-3xl font-bold text-yellow-400">0</span>
+                        </div>
+                    </div>
+
+                    <button onclick="app.animQuery()" class="w-full py-4 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold shadow-md transition-all flex items-center justify-center gap-2">
+                        <span>演示區間和計算</span>
+                        <span class="text-xs bg-green-700 px-2 py-0.5 rounded opacity-80">(範圍: 2,2 到 3,3)</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        const app = {
+            // Data: 5x5 Matrix
+            // Using small fixed numbers for easier mental math
+            rawA: [
+                [1, 1, 1, 1, 1],
+                [1, 2, 2, 2, 1],
+                [1, 2, 5, 2, 1],
+                [1, 2, 2, 2, 1],
+                [1, 1, 1, 1, 1]
+            ],
+            pMatrix: [],
+            isAnimating: false,
+            activeTab: 1,
+
+            init() {
+                this.buildPMatrix();
+                this.renderTab1();
+                this.renderTab2();
+                this.renderTab3();
+            },
+
+            buildPMatrix() {
+                // Initialize P with 0s
+                this.pMatrix = Array(5).fill().map(() => Array(5).fill(0));
+                
+                for(let r=0; r<5; r++) {
+                    for(let c=0; c<5; c++) {
+                        let val = this.rawA[r][c];
+                        if(r>0) val += this.pMatrix[r-1][c];
+                        if(c>0) val += this.pMatrix[r][c-1];
+                        if(r>0 && c>0) val -= this.pMatrix[r-1][c-1];
+                        this.pMatrix[r][c] = val;
+                    }
+                }
+            },
+
+            setTab(t) {
+                if(this.isAnimating) return;
+                this.activeTab = t;
+                
+                // Update Buttons
+                for(let i=1; i<=3; i++) {
+                    const btn = document.getElementById(`tab-${i}`);
+                    const view = document.getElementById(`view-${i}`);
+                    
+                    if(i === t) {
+                        btn.className = `px-4 py-1.5 rounded-md text-sm font-bold transition-all bg-white shadow-sm ${t===1?'text-pink-600':t===2?'text-indigo-600':'text-green-600'}`;
+                        view.classList.remove('hidden');
+                        view.classList.add('anim-fade');
+                    } else {
+                        btn.className = "px-4 py-1.5 rounded-md text-sm font-bold transition-all text-slate-500 hover:text-slate-700";
+                        view.classList.add('hidden');
+                        view.classList.remove('anim-fade');
+                    }
+                }
+            },
+
+            wait(ms) { return new Promise(r => setTimeout(r, ms)); },
+
+            // --- TAB 1: Construction ---
+
+            renderTab1() {
+                const ga = document.getElementById('grid-a');
+                const gp = document.getElementById('grid-p-build');
+                
+                // Render A (Static)
+                ga.innerHTML = '';
+                this.rawA.forEach((row, r) => {
+                    row.forEach((val, c) => {
+                        const el = document.createElement('div');
+                        el.className = "grid-cell bg-white border-slate-200 text-slate-500 text-sm";
+                        el.innerText = val;
+                        el.id = `a-${r}-${c}`;
+                        ga.appendChild(el);
+                    });
+                });
+
+                // Render P (Empty initially)
+                gp.innerHTML = '';
+                for(let r=0; r<5; r++) {
+                    for(let c=0; c<5; c++) {
+                        const el = document.createElement('div');
+                        el.className = "grid-cell bg-slate-50 border-slate-200 text-slate-300 text-sm";
+                        el.innerText = "?";
+                        el.id = `p-build-${r}-${c}`;
+                        gp.appendChild(el);
+                    }
+                }
+            },
+
+            async animBuild() {
+                if(this.isAnimating) return;
+                this.isAnimating = true;
+                this.renderTab1(); // Reset
+
+                const tooltip = document.getElementById('build-tooltip');
+                const ttR = document.getElementById('tt-r');
+                const ttC = document.getElementById('tt-c');
+                const ttVal = document.getElementById('tt-val');
+                const ttCalc = document.getElementById('tt-calc');
+
+                for(let r=0; r<5; r++) {
+                    for(let c=0; c<5; c++) {
+                        const cellP = document.getElementById(`p-build-${r}-${c}`);
+                        const cellA = document.getElementById(`a-${r}-${c}`);
+                        
+                        // Highlight Current Focus
+                        cellA.className = "grid-cell bg-pink-500 text-white border-pink-600 scale-110 shadow-lg z-10";
+                        
+                        // Get Neighbors
+                        let valTop = 0, valLeft = 0, valCorner = 0;
+                        let textCalc = `${this.rawA[r][c]}`;
+
+                        if(r>0) {
+                            valTop = this.pMatrix[r-1][c];
+                            document.getElementById(`p-build-${r-1}-${c}`).classList.add('bg-blue-100', 'border-blue-300', 'text-blue-600');
+                            textCalc += ` + ${valTop}`;
+                        }
+                        if(c>0) {
+                            valLeft = this.pMatrix[r][c-1];
+                            document.getElementById(`p-build-${r}-${c-1}`).classList.add('bg-blue-100', 'border-blue-300', 'text-blue-600');
+                            textCalc += ` + ${valLeft}`;
+                        }
+                        if(r>0 && c>0) {
+                            valCorner = this.pMatrix[r-1][c-1];
+                            // Corner was added twice, so highlight it differently as "subtract"
+                            document.getElementById(`p-build-${r-1}-${c-1}`).classList.remove('bg-blue-100', 'border-blue-300', 'text-blue-600');
+                            document.getElementById(`p-build-${r-1}-${c-1}`).classList.add('bg-red-100', 'border-red-300', 'text-red-600');
+                            textCalc += ` - ${valCorner}`;
+                        }
+
+                        // Show Tooltip
+                        tooltip.style.opacity = '1';
+                        ttR.innerText = r;
+                        ttC.innerText = c;
+                        const currentVal = this.pMatrix[r][c];
+                        ttVal.innerText = currentVal;
+                        ttCalc.innerText = `= ${textCalc}`;
+
+                        // Fill P Value
+                        cellP.innerText = currentVal;
+                        cellP.className = "grid-cell bg-pink-100 text-pink-700 border-pink-300 scale-105 font-bold";
+
+                        await this.wait(600); // Speed
+
+                        // Cleanup Highlights
+                        cellA.className = "grid-cell bg-white border-slate-200 text-slate-500 text-sm opacity-50"; // Dim A as we go
+                        if(r>0) document.getElementById(`p-build-${r-1}-${c}`).className = "grid-cell bg-white border-slate-200 text-slate-600 text-sm";
+                        if(c>0) document.getElementById(`p-build-${r}-${c-1}`).className = "grid-cell bg-white border-slate-200 text-slate-600 text-sm";
+                        if(r>0 && c>0) document.getElementById(`p-build-${r-1}-${c-1}`).className = "grid-cell bg-white border-slate-200 text-slate-600 text-sm";
+                        
+                        cellP.className = "grid-cell bg-white border-slate-200 text-slate-600 text-sm";
+                    }
+                }
+                tooltip.style.opacity = '0';
+                this.isAnimating = false;
+            },
+
+            // --- TAB 2: Meaning ---
+
+            renderTab2() {
+                const gm = document.getElementById('grid-meaning');
+                gm.innerHTML = '';
+                for(let r=0; r<5; r++) {
+                    for(let c=0; c<5; c++) {
+                        const el = document.createElement('div');
+                        el.className = "grid-cell bg-white border-slate-200 text-slate-400 text-xs cursor-pointer hover:border-indigo-500";
+                        el.innerText = this.pMatrix[r][c];
+                        el.dataset.r = r;
+                        el.dataset.c = c;
+                        el.onmouseenter = () => this.hoverMeaning(r, c);
+                        gm.appendChild(el);
+                    }
+                }
+            },
+
+            hoverMeaning(targetR, targetC) {
+                const cells = document.getElementById('grid-meaning').children;
+                const coord = document.getElementById('meaning-coord');
+                const val = document.getElementById('meaning-val');
+                
+                coord.innerText = `(${targetR}, ${targetC})`;
+                val.innerText = this.pMatrix[targetR][targetC];
+
+                Array.from(cells).forEach(cell => {
+                    const r = parseInt(cell.dataset.r);
+                    const c = parseInt(cell.dataset.c);
+                    
+                    // Reset
+                    cell.className = "grid-cell bg-white border-slate-200 text-slate-400 text-xs cursor-pointer";
+
+                    // Highlight Area (0,0) to (targetR, targetC)
+                    if (r <= targetR && c <= targetC) {
+                        cell.classList.remove('bg-white', 'text-slate-400', 'border-slate-200');
+                        
+                        if(r === targetR && c === targetC) {
+                            // Target Cell
+                            cell.classList.add('bg-indigo-600', 'text-white', 'border-indigo-700', 'scale-110', 'z-10');
+                        } else {
+                            // Covered Area
+                            cell.classList.add('bg-indigo-100', 'text-indigo-600', 'border-indigo-200');
+                        }
+                    }
+                });
+            },
+
+            clearHover() {
+                const cells = document.getElementById('grid-meaning').children;
+                Array.from(cells).forEach(cell => {
+                    cell.className = "grid-cell bg-white border-slate-200 text-slate-400 text-xs cursor-pointer";
+                });
+                document.getElementById('meaning-coord').innerText = "(?, ?)";
+                document.getElementById('meaning-val').innerText = "-";
+            },
+
+            // --- TAB 3: Query ---
+
+            renderTab3() {
+                const gq = document.getElementById('grid-query');
+                gq.innerHTML = '';
+                for(let r=0; r<5; r++) {
+                    for(let c=0; c<5; c++) {
+                        const el = document.createElement('div');
+                        el.className = "grid-cell bg-white border-slate-200 text-slate-400 text-xs";
+                        el.innerText = this.pMatrix[r][c];
+                        el.id = `q-${r}-${c}`;
+                        gq.appendChild(el);
+                    }
+                }
+            },
+
+            async animQuery() {
+                if(this.isAnimating) return;
+                this.isAnimating = true;
+                this.renderTab3(); // Reset
+
+                const log = document.getElementById('query-log');
+                const resDisplay = document.getElementById('query-result');
+                log.innerHTML = '';
+                resDisplay.innerText = '0';
+                
+                // Query Range: (2,2) to (3,3)
+                const r1 = 2, c1 = 2, r2 = 3, c2 = 3;
+
+                const highlight = (r, c, bg, text, border, title, desc, val, sign) => {
+                    const cell = document.getElementById(`q-${r}-${c}`);
+                    cell.className = `grid-cell ${bg} ${text} ${border} scale-110 z-10 shadow-lg`;
+                    
+                    const div = document.createElement('div');
+                    div.className = "mb-2 p-2 rounded bg-slate-700/50 border border-slate-600 anim-fade";
+                    div.innerHTML = `
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="font-bold text-xs uppercase text-slate-300">${title}</span>
+                            <span class="font-bold ${sign==='+'?'text-green-400':'text-red-400'} text-lg">${sign} ${val}</span>
+                        </div>
+                        <div class="text-xs text-slate-400 leading-relaxed">${desc}</div>
+                    `;
+                    log.appendChild(div);
+                    log.scrollTop = log.scrollHeight;
+                };
+
+                let sum = 0;
+
+                // 1. P[r2][c2]
+                highlight(r2, c2, 'bg-blue-600', 'text-white', 'border-blue-700', 
+                    `1. 總面積 P[${r2}][${c2}]`, 
+                    "從 (0,0) 到 (3,3) 的總和。<br>包含目標區域，以及上方與左方的多餘區域。", 
+                    this.pMatrix[r2][c2], '+');
+                sum += this.pMatrix[r2][c2];
+                resDisplay.innerText = sum;
+                await this.wait(2000);
+
+                // 2. P[r1-1][c2]
+                highlight(r1-1, c2, 'bg-red-500', 'text-white', 'border-red-600', 
+                    `2. 減去上方 P[${r1-1}][${c2}]`, 
+                    "扣除目標區域上方的矩形範圍<br>(0,0) 到 (1,3)。", 
+                    this.pMatrix[r1-1][c2], '-');
+                sum -= this.pMatrix[r1-1][c2];
+                resDisplay.innerText = sum;
+                await this.wait(2000);
+
+                // 3. P[r2][c1-1]
+                highlight(r2, c1-1, 'bg-red-500', 'text-white', 'border-red-600', 
+                    `3. 減去左方 P[${r2}][${c1-1}]`, 
+                    "扣除目標區域左方的矩形範圍<br>(0,0) 到 (3,1)。", 
+                    this.pMatrix[r2][c1-1], '-');
+                sum -= this.pMatrix[r2][c1-1];
+                resDisplay.innerText = sum;
+                await this.wait(2000);
+
+                // 4. P[r1-1][c1-1]
+                highlight(r1-1, c1-1, 'bg-green-500', 'text-white', 'border-green-600', 
+                    `4. 加回重疊 P[${r1-1}][${c1-1}]`, 
+                    "左上角 (0,0) 到 (1,1) 在步驟 2 和 3 被重複扣除，必須加回一次 (排容原理)。", 
+                    this.pMatrix[r1-1][c1-1], '+');
+                sum += this.pMatrix[r1-1][c1-1];
+                resDisplay.innerText = sum;
+                await this.wait(2000);
+
+                const final = document.createElement('div');
+                final.className = "mt-2 pt-2 border-t border-slate-600 text-yellow-400 font-bold text-center anim-fade";
+                final.innerText = `計算完成！區間和 = ${sum}`;
+                log.appendChild(final);
+                log.scrollTop = log.scrollHeight;
+
+                this.isAnimating = false;
+            }
+        };
+
+        app.init();
+    </script>
+</body>
+</html>

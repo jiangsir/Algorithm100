@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>前綴和應用：三大經典題型</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .transition-all-500 { transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+        .grid-cell {
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; font-family: monospace;
+            border-radius: 0.5rem; border-width: 2px;
+            transition: all 0.3s;
+        }
+        .anim-fade-up { animation: fadeUp 0.5s forwards; opacity: 0; transform: translateY(10px); }
+        @keyframes fadeUp { to { opacity: 1; transform: translateY(0); } }
+        
+        /* 2D Grid Specifics - FIXED: Changed from 6 to 5 to match JS data */
+        .matrix-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr); 
+            gap: 0.25rem;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans text-slate-800 flex flex-col">
+
+    <!-- Navigation -->
+    <nav class="bg-white border-b border-slate-200 px-4 py-4 sticky top-0 z-50 shadow-sm">
+        <div class="max-w-5xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+            <h1 class="text-xl font-bold text-slate-900 flex items-center gap-2">
+                <svg class="text-indigo-600" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16m-7 6h7"/></svg>
+                前綴和應用：三大經典題型
+            </h1>
+            <div class="flex bg-slate-100 p-1 rounded-lg">
+                <button onclick="app.switchTab('basic')" id="tab-basic" class="px-4 py-1.5 rounded-md text-sm font-bold transition-all bg-white shadow-sm text-indigo-600">基礎：一維區間和</button>
+                <button onclick="app.switchTab('equilibrium')" id="tab-equilibrium" class="px-4 py-1.5 rounded-md text-sm font-bold transition-all text-slate-500 hover:text-slate-700">應用：尋找平衡點</button>
+                <button onclick="app.switchTab('2d')" id="tab-2d" class="px-4 py-1.5 rounded-md text-sm font-bold transition-all text-slate-500 hover:text-slate-700">進階：二維矩陣和</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-grow p-4 md:p-8 max-w-5xl mx-auto w-full space-y-6">
+
+        <!-- TAB 1: BASIC CONCEPT -->
+        <section id="view-basic" class="space-y-6">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <h2 class="text-lg font-bold text-slate-800 mb-2 border-l-4 border-indigo-500 pl-3">題型一：基礎區間和 (Range Sum Query)</h2>
+                <p class="text-slate-600 text-sm mb-4">
+                    <span class="font-bold">問題：</span>計算陣列 A 中索引 L 到 R 的總和。<br>
+                    <span class="font-bold text-indigo-600">前綴和解法：</span>
+                    預先計算 <code class="bg-slate-100 px-1 rounded">P[i] = A[0] + ... + A[i]</code>。
+                    查詢時使用公式 <code class="bg-indigo-50 text-indigo-700 px-1 rounded font-bold">Sum(L, R) = P[R] - P[L-1]</code>。
+                </p>
+                <div class="flex gap-4">
+                    <button onclick="app.animBasicBuild()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-sm transition-all">
+                        1. 建立前綴和 P[]
+                    </button>
+                    <button onclick="app.animBasicQuery()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-sm transition-all shadow-md">
+                        2. 使用公式查詢 Sum(2, 4)
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-2xl shadow-md border border-slate-200 min-h-[300px] space-y-8">
+                <div>
+                    <div class="text-xs font-bold text-slate-400 uppercase mb-2">原始陣列 A[]</div>
+                    <div id="basic-arr-a" class="flex flex-wrap gap-2"></div>
+                </div>
+                <div>
+                    <div class="text-xs font-bold text-slate-400 uppercase mb-2">前綴和 P[] (P[i] = A[0]...A[i])</div>
+                    <div id="basic-arr-p" class="flex flex-wrap gap-2"></div>
+                </div>
+                <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 font-mono text-center text-sm md:text-base h-24 flex items-center justify-center">
+                    <span id="basic-log" class="text-slate-500">請先點擊「建立前綴和」...</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: EQUILIBRIUM INDEX -->
+        <section id="view-equilibrium" class="hidden space-y-6">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <h2 class="text-lg font-bold text-slate-800 mb-2 border-l-4 border-amber-500 pl-3">題型二：尋找平衡點 (Pivot Index)</h2>
+                <p class="text-slate-600 text-sm mb-4">
+                    <span class="font-bold">問題：</span>找到索引 `i`，使左邊元素和等於右邊元素和。<br>
+                    <span class="font-bold text-amber-600">前綴和解法：</span>
+                    利用前綴和 P[]，我們可以 O(1) 算出左右兩邊。<br>
+                    左邊和 = <code class="bg-slate-100 px-1 rounded">P[i-1]</code>，
+                    右邊和 = <code class="bg-slate-100 px-1 rounded">P[最後] - P[i]</code>。
+                </p>
+            </div>
+
+            <div class="bg-white p-6 rounded-2xl shadow-md border border-slate-200 min-h-[300px] flex flex-col justify-center gap-8">
+                <!-- Data Visualization -->
+                <div class="space-y-6">
+                    <div>
+                        <div class="text-xs font-bold text-slate-400 uppercase mb-2 text-center">原始陣列與指針</div>
+                        <div id="eq-arr" class="flex flex-wrap gap-2 justify-center"></div>
+                    </div>
+                    
+                    <!-- Formula Visual -->
+                    <div class="flex justify-center items-center gap-4 md:gap-8">
+                        <div class="bg-blue-50 p-4 rounded-xl border-2 border-blue-100 text-center w-40 transition-all duration-300" id="eq-box-left">
+                            <div class="text-xs text-blue-400 font-bold uppercase mb-1">左邊和 (P[i-1])</div>
+                            <div id="eq-val-left" class="text-3xl font-bold text-blue-600">-</div>
+                        </div>
+                        <div class="text-slate-300 font-bold text-xl">VS</div>
+                        <div class="bg-amber-50 p-4 rounded-xl border-2 border-amber-100 text-center w-40 transition-all duration-300" id="eq-box-right">
+                            <div class="text-xs text-amber-400 font-bold uppercase mb-1">右邊和 (Total - P[i])</div>
+                            <div id="eq-val-right" class="text-3xl font-bold text-amber-600">-</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex flex-col items-center gap-4">
+                    <div id="eq-log" class="text-slate-500 font-bold h-6">準備開始...</div>
+                    <button onclick="app.animEquilibrium()" class="px-8 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold shadow-md transition-all">
+                        開始尋找平衡點
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: 2D MATRIX -->
+        <section id="view-2d" class="hidden space-y-6">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <h2 class="text-lg font-bold text-slate-800 mb-2 border-l-4 border-pink-500 pl-3">題型三：二維矩陣區間和 (2D Range Sum)</h2>
+                <p class="text-slate-600 text-sm mb-4">
+                    <span class="font-bold">問題：</span>計算矩陣中任意子矩形 (r1, c1) 到 (r2, c2) 的總和。<br>
+                    <span class="font-bold text-pink-600">二維前綴和解法：</span>
+                    <code class="bg-slate-100 px-1 rounded">P[i][j]</code> 代表從 (0,0) 到 (i,j) 的矩形總和。<br>
+                    公式 (排容原理)：<code class="bg-pink-50 text-pink-700 px-1 rounded font-bold text-xs md:text-sm">Sum = P[r2][c2] - P[r1-1][c2] - P[r2][c1-1] + P[r1-1][c1-1]</code>
+                </p>
+            </div>
+
+            <div class="grid lg:grid-cols-2 gap-6">
+                <!-- Matrix Visual -->
+                <div class="bg-white p-6 rounded-2xl shadow-md border border-slate-200 flex flex-col items-center">
+                    <div class="mb-4 text-xs font-bold text-slate-400 uppercase flex justify-between w-full max-w-[320px]">
+                        <span>二維前綴和矩陣 P[][]</span>
+                        <span class="text-slate-300">5x5 Grid</span>
+                    </div>
+                    <div id="matrix-container" class="matrix-grid w-full max-w-[320px]"></div>
+                </div>
+
+                <!-- Explanation / Controls -->
+                <div class="flex flex-col gap-4">
+                    <div class="bg-slate-800 p-5 rounded-2xl text-white shadow-lg flex-grow flex flex-col justify-center">
+                        <div class="text-xs font-bold text-slate-400 uppercase mb-4">排容原理計算步驟</div>
+                        <div id="2d-log" class="space-y-3 font-mono text-sm h-48 overflow-y-auto pr-2">
+                            <div class="text-slate-500 italic">點擊下方按鈕演示...</div>
+                        </div>
+                        <div class="mt-4 pt-4 border-t border-slate-700 flex justify-between items-center">
+                            <span class="text-slate-400">計算結果:</span>
+                            <span id="2d-result" class="text-3xl font-bold text-yellow-400">0</span>
+                        </div>
+                    </div>
+
+                    <button onclick="app.anim2D()" class="w-full py-3 bg-pink-600 hover:bg-pink-700 text-white rounded-xl font-bold shadow-md transition-all">
+                        演示公式運算 (範圍: 2,2 到 3,3)
+                    </button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        const app = {
+            // Data
+            basicData: [2, 4, 6, 8, 10, 12],
+            eqData: [1, 7, 3, 6, 5, 6], // Pivot index 3 (val 6). Left sum 11, Right sum 11.
+            pMatrix: [], // Will be generated
+            
+            // State
+            isAnimating: false,
+            pArrBasic: [], // Store P array for basic tab
+            pArrEq: [], // Store P array for equilibrium tab
+
+            init() {
+                // Initialize Basic Arrays
+                this.renderBasicArr('basic-arr-a', this.basicData, false);
+                this.renderBasicArr('basic-arr-p', Array(this.basicData.length).fill('?'), true);
+                
+                // Initialize Equilibrium
+                this.pArrEq = this.buildPrefix(this.eqData);
+                this.renderEqArr();
+                
+                // Initialize 2D
+                this.build2DPrefix();
+                this.renderMatrix();
+            },
+
+            buildPrefix(arr) {
+                let sum = 0;
+                return arr.map(v => sum += v);
+            },
+
+            build2DPrefix() {
+                // Generate random small numbers for demo 5x5
+                const size = 5;
+                const raw = [];
+                for(let i=0; i<size; i++) {
+                    const row = [];
+                    for(let j=0; j<size; j++) row.push(Math.floor(Math.random()*3)+1);
+                    raw.push(row);
+                }
+                
+                // Build P
+                this.pMatrix = Array(size).fill().map(() => Array(size).fill(0));
+                for(let r=0; r<size; r++) {
+                    for(let c=0; c<size; c++) {
+                        let val = raw[r][c];
+                        if(r>0) val += this.pMatrix[r-1][c];
+                        if(c>0) val += this.pMatrix[r][c-1];
+                        if(r>0 && c>0) val -= this.pMatrix[r-1][c-1];
+                        this.pMatrix[r][c] = val;
+                    }
+                }
+            },
+
+            switchTab(tab) {
+                if (this.isAnimating) return;
+                ['basic', 'equilibrium', '2d'].forEach(t => {
+                    const btn = document.getElementById(`tab-${t}`);
+                    const view = document.getElementById(`view-${t}`);
+                    if (t === tab) {
+                        btn.className = "px-4 py-1.5 rounded-md text-sm font-bold transition-all bg-white shadow-sm text-indigo-600";
+                        view.classList.remove('hidden');
+                        view.classList.add('anim-fade-up');
+                    } else {
+                        btn.className = "px-4 py-1.5 rounded-md text-sm font-bold transition-all text-slate-500 hover:text-slate-700";
+                        view.classList.add('hidden');
+                        view.classList.remove('anim-fade-up');
+                    }
+                });
+            },
+
+            wait(ms) { return new Promise(r => setTimeout(r, ms)); },
+
+            // --- TAB 1: BASIC ---
+
+            renderBasicArr(id, data, isP) {
+                const container = document.getElementById(id);
+                container.innerHTML = data.map((v, i) => 
+                    `<div class="flex flex-col items-center gap-1">
+                        <div class="text-[10px] text-slate-300">${i}</div>
+                        <div class="grid-cell w-10 h-10 md:w-12 md:h-12 ${isP ? 'bg-slate-50 text-slate-400 border-slate-200' : 'bg-white text-slate-600 border-slate-200'}">${v}</div>
+                    </div>`
+                ).join('');
+            },
+
+            async animBasicBuild() {
+                if (this.isAnimating) return;
+                this.isAnimating = true;
+                
+                this.pArrBasic = [];
+                let sum = 0;
+                const pCells = document.getElementById('basic-arr-p').children;
+                const log = document.getElementById('basic-log');
+
+                log.innerHTML = "開始構建前綴和 P[i] = P[i-1] + A[i]";
+
+                for(let i=0; i<this.basicData.length; i++) {
+                    sum += this.basicData[i];
+                    this.pArrBasic.push(sum);
+                    
+                    const cell = pCells[i].querySelector('.grid-cell');
+                    cell.innerText = sum;
+                    cell.className = "grid-cell w-10 h-10 md:w-12 md:h-12 bg-indigo-100 text-indigo-700 border-indigo-300 scale-110";
+                    
+                    await this.wait(300);
+                    cell.classList.remove('scale-110');
+                }
+                
+                log.innerHTML = "<span class='text-green-600 font-bold'>構建完成！現在可以進行查詢。</span>";
+                this.isAnimating = false;
+            },
+
+            async animBasicQuery() {
+                if (this.isAnimating) return;
+                if (this.pArrBasic.length === 0) {
+                    alert("請先建立前綴和！");
+                    return;
+                }
+                this.isAnimating = true;
+                
+                const log = document.getElementById('basic-log');
+                const pCells = document.getElementById('basic-arr-p').children;
+                const L=2, R=4; // Hardcoded example for clarity
+
+                // Reset P styles
+                for(let i=0; i<pCells.length; i++) {
+                     pCells[i].querySelector('.grid-cell').className = "grid-cell w-10 h-10 md:w-12 md:h-12 bg-indigo-50 text-indigo-700 border-indigo-200";
+                }
+
+                log.innerHTML = `計算 Sum(${L}, ${R})... 公式: <span class="text-indigo-600 font-bold">P[${R}] - P[${L-1}]</span>`;
+                await this.wait(800);
+
+                // Highlight P[R]
+                const cellR = pCells[R].querySelector('.grid-cell');
+                cellR.className = "grid-cell w-10 h-10 md:w-12 md:h-12 bg-green-500 text-white border-green-600 scale-110 shadow-lg";
+                log.innerHTML = `1. 找到 <span class="text-green-600 font-bold">P[${R}] = ${this.pArrBasic[R]}</span> (代表 0~${R} 的總和)`;
+                await this.wait(1000);
+
+                // Highlight P[L-1]
+                const cellL = pCells[L-1].querySelector('.grid-cell');
+                cellL.className = "grid-cell w-10 h-10 md:w-12 md:h-12 bg-red-500 text-white border-red-600 scale-110 shadow-lg";
+                log.innerHTML = `2. 找到 <span class="text-red-600 font-bold">P[${L-1}] = ${this.pArrBasic[L-1]}</span> (代表 0~${L-1} 的總和)`;
+                await this.wait(1000);
+
+                // Result
+                const ans = this.pArrBasic[R] - this.pArrBasic[L-1];
+                log.innerHTML = `3. 相減得到結果: ${this.pArrBasic[R]} - ${this.pArrBasic[L-1]} = <span class="text-indigo-600 font-bold text-xl">${ans}</span>`;
+                
+                this.isAnimating = false;
+            },
+
+            // --- TAB 2: EQUILIBRIUM ---
+
+            renderEqArr() {
+                const container = document.getElementById('eq-arr');
+                container.innerHTML = this.eqData.map((v, i) => 
+                    `<div class="flex flex-col items-center gap-1">
+                        <div class="text-[10px] text-slate-300">${i}</div>
+                        <div class="grid-cell w-10 h-10 bg-white border-slate-200 text-slate-600">${v}</div>
+                    </div>`
+                ).join('');
+            },
+
+            async animEquilibrium() {
+                if (this.isAnimating) return;
+                this.isAnimating = true;
+                
+                const cells = document.getElementById('eq-arr').children;
+                const log = document.getElementById('eq-log');
+                const leftBox = document.getElementById('eq-box-left');
+                const rightBox = document.getElementById('eq-box-right');
+                const leftVal = document.getElementById('eq-val-left');
+                const rightVal = document.getElementById('eq-val-right');
+                
+                const totalSum = this.pArrEq[this.eqData.length - 1]; // P[last]
+
+                for(let i=0; i<this.eqData.length; i++) {
+                    const cell = cells[i].querySelector('.grid-cell');
+                    
+                    // Highlight Pivot
+                    cell.className = "grid-cell w-10 h-10 bg-purple-600 text-white border-purple-700 scale-110 z-10 shadow-lg";
+                    log.innerText = `檢查索引 ${i} (數值 ${this.eqData[i]})...`;
+                    
+                    // Calc Left using P
+                    leftBox.classList.add('border-blue-400', 'bg-blue-100');
+                    const lSum = i === 0 ? 0 : this.pArrEq[i-1];
+                    leftVal.innerText = lSum;
+                    await this.wait(400);
+                    leftBox.classList.remove('border-blue-400', 'bg-blue-100');
+
+                    // Calc Right using P
+                    rightBox.classList.add('border-amber-400', 'bg-amber-100');
+                    const rSum = totalSum - this.pArrEq[i];
+                    rightVal.innerText = rSum;
+                    await this.wait(400);
+                    rightBox.classList.remove('border-amber-400', 'bg-amber-100');
+
+                    if (lSum === rSum) {
+                        log.innerHTML = `<span class="text-green-600 font-bold">找到平衡點！索引 ${i} (左 ${lSum} == 右 ${rSum})</span>`;
+                        cell.className = "grid-cell w-10 h-10 bg-green-500 text-white border-green-600 scale-110 shadow-lg";
+                        this.isAnimating = false;
+                        return;
+                    }
+
+                    // Reset
+                    cell.className = "grid-cell w-10 h-10 bg-white border-slate-200 text-slate-600 opacity-50";
+                    await this.wait(200);
+                }
+                
+                log.innerText = "未找到平衡點。";
+                this.isAnimating = false;
+            },
+
+            // --- TAB 3: 2D MATRIX ---
+
+            renderMatrix() {
+                const container = document.getElementById('matrix-container');
+                container.innerHTML = '';
+                // Assume 5x5
+                const size = 5;
+                for(let r=0; r<size; r++) {
+                    for(let c=0; c<size; c++) {
+                        const div = document.createElement('div');
+                        div.className = "grid-cell w-full aspect-square text-xs md:text-sm bg-white border-slate-200 text-slate-400";
+                        div.innerText = this.pMatrix[r][c];
+                        div.dataset.r = r;
+                        div.dataset.c = c;
+                        container.appendChild(div);
+                    }
+                }
+            },
+
+            async anim2D() {
+                if (this.isAnimating) return;
+                this.isAnimating = true;
+                this.renderMatrix(); // Reset
+
+                const r1=2, c1=2, r2=3, c2=3; // Query region
+                const log = document.getElementById('2d-log');
+                const resDisplay = document.getElementById('2d-result');
+                log.innerHTML = '';
+
+                const getCell = (r, c) => {
+                    const cells = document.getElementById('matrix-container').children;
+                    return Array.from(cells).find(el => parseInt(el.dataset.r)===r && parseInt(el.dataset.c)===c);
+                };
+
+                const highlight = (r, c, colorClass, msg, val, sign) => {
+                    const el = getCell(r, c);
+                    el.className = `grid-cell w-full aspect-square text-xs md:text-sm text-white scale-110 shadow-lg z-10 ${colorClass}`;
+                    
+                    const entry = document.createElement('div');
+                    entry.innerHTML = `<span class="${sign === '+' ? 'text-green-400' : 'text-red-400'} font-bold text-lg mr-2">${sign}</span> ${msg}: <span class="font-bold">${val}</span>`;
+                    log.appendChild(entry);
+                    log.scrollTop = log.scrollHeight;
+                    return val;
+                };
+
+                let result = 0;
+
+                // 1. P[r2][c2] - Big Blue
+                const v1 = highlight(r2, c2, "bg-blue-500 border-blue-600", `P[${r2}][${c2}] (大矩形)`, this.pMatrix[r2][c2], '+');
+                result += v1;
+                resDisplay.innerText = result;
+                await this.wait(1000);
+
+                // 2. P[r1-1][c2] - Top Red
+                const v2 = highlight(r1-1, c2, "bg-red-500 border-red-600", `P[${r1-1}][${c2}] (上方多餘)`, this.pMatrix[r1-1][c2], '-');
+                result -= v2;
+                resDisplay.innerText = result;
+                await this.wait(1000);
+
+                // 3. P[r2][c1-1] - Left Red
+                const v3 = highlight(r2, c1-1, "bg-red-500 border-red-600", `P[${r2}][${c1-1}] (左方多餘)`, this.pMatrix[r2][c1-1], '-');
+                result -= v3;
+                resDisplay.innerText = result;
+                await this.wait(1000);
+
+                // 4. P[r1-1][c1-1] - Corner Green
+                const v4 = highlight(r1-1, c1-1, "bg-green-500 border-green-600", `P[${r1-1}][${c1-1}] (重複扣除部分加回)`, this.pMatrix[r1-1][c1-1], '+');
+                result += v4;
+                resDisplay.innerText = result;
+                await this.wait(1000);
+
+                const final = document.createElement('div');
+                final.className = "mt-2 pt-2 border-t border-slate-600 text-yellow-400 font-bold";
+                final.innerText = "計算完成！";
+                log.appendChild(final);
+                log.scrollTop = log.scrollHeight;
+
+                this.isAnimating = false;
+            }
+        };
+
+        app.init();
+    </script>
+</body>
+</html>

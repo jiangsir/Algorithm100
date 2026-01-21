@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>差分 (Difference Array) 視覺化教學</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .grid-cell {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            width: 3.5rem; height: 3.5rem;
+            border-radius: 0.5rem; border-width: 2px;
+            font-weight: bold; font-family: monospace;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .arrow-down {
+            width: 0; height: 0; 
+            border-left: 6px solid transparent; border-right: 6px solid transparent;
+            border-top: 10px solid #cbd5e1; /* slate-300 */
+            margin: 0.5rem 0;
+            transition: all 0.3s;
+        }
+        .fade-in-up { animation: fadeInUp 0.5s forwards; }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        input[type=range] { -webkit-appearance: none; background: transparent; }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 16px; width: 16px;
+            border-radius: 50%; background: #f97316; cursor: pointer;
+            margin-top: -6px; box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px; cursor: pointer; background: #e2e8f0; border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans text-slate-800 flex flex-col">
+
+    <!-- Navigation -->
+    <nav class="bg-white border-b border-slate-200 px-4 py-4 sticky top-0 z-50 shadow-sm">
+        <div class="max-w-5xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+            <h1 class="text-xl font-bold text-slate-900 flex items-center gap-2">
+                <svg class="text-orange-500" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+                差分 (Difference Array)
+            </h1>
+            <div class="flex bg-slate-100 p-1 rounded-lg">
+                <button onclick="app.setTab(1)" id="tab-1" class="px-4 py-1.5 rounded-md text-sm font-bold transition-all bg-white shadow-sm text-orange-600">1. 定義與建構</button>
+                <button onclick="app.setTab(2)" id="tab-2" class="px-4 py-1.5 rounded-md text-sm font-bold transition-all text-slate-500 hover:text-slate-700">2. 還原原數列</button>
+                <button onclick="app.setTab(3)" id="tab-3" class="px-4 py-1.5 rounded-md text-sm font-bold transition-all text-slate-500 hover:text-slate-700">3. 區間修改 (核心)</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-grow p-4 md:p-8 max-w-5xl mx-auto w-full space-y-6">
+
+        <!-- TAB 1: Construction -->
+        <section id="view-1" class="space-y-6 fade-in-up">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <h2 class="text-lg font-bold text-slate-800 mb-2 border-l-4 border-orange-500 pl-3">什麼是差分數列？</h2>
+                <p class="text-slate-600 text-sm mb-4">
+                    對於一個數列 <code class="bg-slate-100 px-1 rounded font-bold text-blue-600">A[]</code>，我們定義它的差分數列 <code class="bg-slate-100 px-1 rounded font-bold text-orange-600">D[]</code> 為：
+                    相鄰兩項的差值。
+                </p>
+                <div class="bg-orange-50 p-3 rounded-lg text-center font-mono text-orange-800 font-bold mb-4">
+                    D[i] = A[i] - A[i-1] <span class="text-xs font-normal text-orange-600 ml-2">(當 i=0 時，D[0] = A[0])</span>
+                </div>
+                <button onclick="app.animConstruct()" class="px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-bold shadow-md transition-all flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                    演示建構過程
+                </button>
+            </div>
+
+            <!-- Visualization Area -->
+            <div class="bg-white p-6 rounded-2xl shadow-md border border-slate-200 flex flex-col items-center gap-4">
+                
+                <!-- Array A -->
+                <div class="relative w-full overflow-x-auto pb-2">
+                    <div class="text-xs font-bold text-slate-400 uppercase mb-2 pl-2">原始數列 A[]</div>
+                    <div id="con-arr-a" class="flex gap-2 min-w-max px-2"></div>
+                </div>
+
+                <!-- Arrows -->
+                <div id="con-arrows" class="flex gap-2 min-w-max px-2 h-8 w-full justify-start overflow-hidden">
+                    <!-- JS Injected -->
+                </div>
+
+                <!-- Array D -->
+                <div class="relative w-full overflow-x-auto pb-2">
+                    <div class="text-xs font-bold text-slate-400 uppercase mb-2 pl-2">差分數列 D[]</div>
+                    <div id="con-arr-d" class="flex gap-2 min-w-max px-2"></div>
+                </div>
+
+                <!-- Log -->
+                <div id="con-log" class="h-10 text-sm font-mono text-slate-500 flex items-center justify-center bg-slate-50 w-full rounded-lg border border-slate-100 mt-2">
+                    點擊按鈕開始...
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: Recovery -->
+        <section id="view-2" class="hidden space-y-6">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <h2 class="text-lg font-bold text-slate-800 mb-2 border-l-4 border-blue-500 pl-3">差分與前綴和的關係</h2>
+                <p class="text-slate-600 text-sm mb-4">
+                    差分是前綴和的逆運算。如果我們對 <code class="font-bold text-orange-600">D[]</code> 做<span class="font-bold text-blue-600">前綴和 (Prefix Sum)</span>，就能還原出 <code class="font-bold text-blue-600">A[]</code>。
+                </p>
+                <div class="bg-blue-50 p-3 rounded-lg text-center font-mono text-blue-800 font-bold mb-4">
+                    A[i] = D[0] + D[1] + ... + D[i] = A[i-1] + D[i]
+                </div>
+                <button onclick="app.animRecover()" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-md transition-all">
+                    演示還原過程
+                </button>
+            </div>
+
+            <div class="bg-white p-6 rounded-2xl shadow-md border border-slate-200 flex flex-col items-center gap-6">
+                 <!-- Array D (Source) -->
+                 <div class="relative w-full">
+                    <div class="text-xs font-bold text-slate-400 uppercase mb-2 pl-2">差分數列 D[] (已知)</div>
+                    <div id="rec-arr-d" class="flex gap-2 flex-wrap justify-center"></div>
+                </div>
+
+                <!-- Arrow Down -->
+                <div class="text-slate-300">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+                </div>
+
+                <!-- Array A (Result) -->
+                <div class="relative w-full">
+                    <div class="text-xs font-bold text-slate-400 uppercase mb-2 pl-2 text-center">還原數列 A[] (前綴和結果)</div>
+                    <div id="rec-arr-a" class="flex gap-2 flex-wrap justify-center"></div>
+                </div>
+
+                 <!-- Log -->
+                 <div id="rec-log" class="h-10 text-sm font-mono text-slate-500 flex items-center justify-center bg-slate-50 w-full rounded-lg border border-slate-100">
+                    等待開始...
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: Range Update -->
+        <section id="view-3" class="hidden space-y-6">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <h2 class="text-lg font-bold text-slate-800 mb-2 border-l-4 border-green-500 pl-3">核心應用：區間修改 O(1)</h2>
+                <p class="text-slate-600 text-sm mb-4">
+                    如果我們想讓 A[L...R] 的每個數字都加上 <span class="font-bold text-purple-600">V</span>，我們不需要跑迴圈修改 A。<br>
+                    我們只需要修改差分陣列 D 的<span class="font-bold text-red-500">兩個點</span>：
+                </p>
+                <div class="bg-green-50 p-3 rounded-lg text-center font-mono text-green-900 font-bold mb-4 grid grid-cols-2 gap-4">
+                    <div class="bg-white p-2 rounded border border-green-200 shadow-sm">
+                        1. D[L] += V
+                        <div class="text-[10px] text-slate-400 font-normal mt-1">讓 L 之後的所有前綴和都增加 V</div>
+                    </div>
+                    <div class="bg-white p-2 rounded border-green-200 shadow-sm">
+                        2. D[R+1] -= V
+                        <div class="text-[10px] text-slate-400 font-normal mt-1">抵銷 R 之後的影響，讓增加效果停在 R</div>
+                    </div>
+                </div>
+                
+                <!-- Controls -->
+                <div class="grid grid-cols-3 gap-4 mb-4">
+                    <div>
+                        <label class="text-xs font-bold text-slate-500">起始 L: <span id="val-l" class="text-green-600">2</span></label>
+                        <input type="range" min="0" max="6" value="2" class="w-full" oninput="app.updateInputs('l', this.value)">
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-slate-500">結束 R: <span id="val-r" class="text-green-600">4</span></label>
+                        <input type="range" min="0" max="6" value="4" class="w-full" oninput="app.updateInputs('r', this.value)">
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-slate-500">增加值 V: <span id="val-v" class="text-purple-600">3</span></label>
+                        <input type="range" min="1" max="5" value="3" class="w-full" oninput="app.updateInputs('v', this.value)">
+                    </div>
+                </div>
+
+                <button onclick="app.animUpdate()" class="w-full py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold shadow-md transition-all flex items-center justify-center gap-2">
+                    執行區間修改
+                </button>
+            </div>
+
+            <!-- Visualization -->
+            <div class="bg-white p-6 rounded-2xl shadow-md border border-slate-200 space-y-6">
+                
+                <!-- D Array -->
+                <div>
+                    <div class="flex justify-between items-end mb-2">
+                        <div class="text-xs font-bold text-slate-400 uppercase pl-2">差分數列 D[] (修改操作區)</div>
+                    </div>
+                    <div id="upd-arr-d" class="flex gap-2 flex-wrap justify-center"></div>
+                </div>
+
+                <!-- Explanation / Transition -->
+                <div class="flex items-center justify-center text-slate-300 gap-2 text-sm">
+                    <span>做前綴和還原</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+                </div>
+
+                <!-- A Array -->
+                <div>
+                    <div class="text-xs font-bold text-slate-400 uppercase mb-2 pl-2 text-center">結果數列 A[] (觀察區間變化)</div>
+                    <div id="upd-arr-a" class="flex gap-2 flex-wrap justify-center"></div>
+                </div>
+
+                <!-- Log -->
+                <div id="upd-log" class="h-16 overflow-y-auto text-sm font-mono text-slate-500 bg-slate-50 w-full rounded-lg border border-slate-100 p-2">
+                    設定好 L, R, V 後點擊執行...
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        const app = {
+            // Initial Data
+            dataA: [1, 3, 4, 2, 5, 8, 6],
+            dataD: [], // To be calculated
+            
+            // State
+            isAnimating: false,
+            l: 2, r: 4, v: 3,
+
+            init() {
+                // Calculate initial D
+                this.dataD = [];
+                for(let i=0; i<this.dataA.length; i++) {
+                    const prev = i === 0 ? 0 : this.dataA[i-1];
+                    this.dataD.push(this.dataA[i] - prev);
+                }
+                
+                // Render Initial States
+                this.renderTab1();
+                this.renderTab2();
+                this.renderTab3();
+            },
+
+            setTab(t) {
+                if(this.isAnimating) return;
+                
+                for(let i=1; i<=3; i++) {
+                    const btn = document.getElementById(`tab-${i}`);
+                    const view = document.getElementById(`view-${i}`);
+                    
+                    // Reset Logic when switching tabs
+                    if (t === i) {
+                        btn.classList.add('bg-white', 'shadow-sm', i===1?'text-orange-600':i===2?'text-blue-600':'text-green-600');
+                        btn.classList.remove('text-slate-500', 'hover:text-slate-700');
+                        view.classList.remove('hidden');
+                        view.classList.add('fade-in-up');
+                        
+                        // Re-render to clear animation states
+                        if(i===1) this.renderTab1();
+                        if(i===2) this.renderTab2();
+                        if(i===3) this.renderTab3();
+                    } else {
+                        btn.classList.remove('bg-white', 'shadow-sm', 'text-orange-600', 'text-blue-600', 'text-green-600');
+                        btn.classList.add('text-slate-500', 'hover:text-slate-700');
+                        view.classList.add('hidden');
+                        view.classList.remove('fade-in-up');
+                    }
+                }
+            },
+
+            wait(ms) { return new Promise(r => setTimeout(r, ms)); },
+
+            createCell(val, idx, color='slate') {
+                const border = `border-${color}-200`;
+                const text = `text-${color}-600`;
+                const bg = `bg-white`;
+                
+                return `
+                    <div class="flex flex-col items-center gap-1">
+                        <div class="text-[10px] text-slate-300 font-mono">${idx}</div>
+                        <div id="cell-${idx}" class="grid-cell ${bg} ${border} ${text} shadow-sm">
+                            ${val}
+                        </div>
+                    </div>
+                `;
+            },
+
+            // --- TAB 1: Construction ---
+
+            renderTab1() {
+                const conA = document.getElementById('con-arr-a');
+                const conD = document.getElementById('con-arr-d');
+                const conArrows = document.getElementById('con-arrows');
+                
+                conA.innerHTML = this.dataA.map((v, i) => this.createCell(v, i, 'blue')).join('');
+                conD.innerHTML = this.dataA.map((_, i) => 
+                    `<div class="flex flex-col items-center gap-1">
+                        <div class="text-[10px] text-slate-300 font-mono">${i}</div>
+                        <div id="d-cell-${i}" class="grid-cell bg-slate-50 border-slate-200 text-slate-300 shadow-inner">?</div>
+                    </div>`
+                ).join('');
+                
+                // Clear arrows
+                conArrows.innerHTML = this.dataA.map(() => `<div class="w-[3.5rem] flex justify-center opacity-0"><div class="arrow-down"></div></div>`).join('');
+                document.getElementById('con-log').innerText = '點擊按鈕開始演示...';
+            },
+
+            async animConstruct() {
+                if(this.isAnimating) return;
+                this.isAnimating = true;
+                this.renderTab1();
+
+                const log = document.getElementById('con-log');
+                const arrows = document.getElementById('con-arrows').children;
+
+                for(let i=0; i<this.dataA.length; i++) {
+                    const cellA = document.getElementById('con-arr-a').children[i].querySelector('.grid-cell');
+                    const cellD = document.getElementById(`d-cell-${i}`);
+                    
+                    // Highlight A[i]
+                    cellA.classList.add('bg-blue-500', 'text-white', 'border-blue-600', 'scale-110');
+                    
+                    // Highlight A[i-1] if exists
+                    let prevVal = 0;
+                    let text = `D[${i}] = A[${i}] - 0 = ${this.dataA[i]}`;
+                    
+                    if (i > 0) {
+                        prevVal = this.dataA[i-1];
+                        const prevCell = document.getElementById('con-arr-a').children[i-1].querySelector('.grid-cell');
+                        prevCell.classList.add('bg-blue-100', 'border-blue-400'); // Secondary highlight
+                        text = `D[${i}] = A[${i}] - A[${i-1}] = ${this.dataA[i]} - ${prevVal} = ${this.dataA[i] - prevVal}`;
+                    } else {
+                         text = `D[0] = A[0] = ${this.dataA[0]} (邊界情況)`;
+                    }
+
+                    log.innerText = text;
+                    arrows[i].firstElementChild.style.opacity = '1'; // Show arrow
+
+                    await this.wait(600);
+
+                    // Fill D
+                    const val = this.dataA[i] - prevVal;
+                    cellD.innerText = val;
+                    cellD.className = "grid-cell bg-orange-100 border-orange-300 text-orange-700 font-bold scale-110 shadow-md";
+
+                    await this.wait(400);
+
+                    // Clean up
+                    cellA.classList.remove('bg-blue-500', 'text-white', 'border-blue-600', 'scale-110');
+                    if(i>0) document.getElementById('con-arr-a').children[i-1].querySelector('.grid-cell').classList.remove('bg-blue-100', 'border-blue-400');
+                    cellD.classList.remove('scale-110');
+                    cellD.className = "grid-cell bg-white border-orange-200 text-orange-600 shadow-sm";
+                }
+
+                log.innerText = "建構完成！ D[i] 紀錄了相鄰兩數的變化量。";
+                this.isAnimating = false;
+            },
+
+            // --- TAB 2: Recovery ---
+
+            renderTab2() {
+                // Re-calculate D just in case
+                this.dataD = [];
+                for(let i=0; i<this.dataA.length; i++) {
+                    const prev = i===0 ? 0 : this.dataA[i-1];
+                    this.dataD.push(this.dataA[i] - prev);
+                }
+
+                const recD = document.getElementById('rec-arr-d');
+                const recA = document.getElementById('rec-arr-a');
+                
+                recD.innerHTML = this.dataD.map((v, i) => this.createCell(v, i, 'orange')).join('');
+                recA.innerHTML = this.dataA.map((_, i) => 
+                    `<div class="flex flex-col items-center gap-1">
+                        <div class="text-[10px] text-slate-300 font-mono">${i}</div>
+                        <div id="rec-a-${i}" class="grid-cell bg-slate-50 border-slate-200 text-slate-300 shadow-inner">?</div>
+                    </div>`
+                ).join('');
+                document.getElementById('rec-log').innerText = '點擊按鈕演示如何還原...';
+            },
+
+            async animRecover() {
+                if(this.isAnimating) return;
+                this.isAnimating = true;
+                this.renderTab2();
+                
+                const log = document.getElementById('rec-log');
+                let currentSum = 0;
+
+                for(let i=0; i<this.dataD.length; i++) {
+                    const cellD = document.getElementById('rec-arr-d').children[i].querySelector('.grid-cell');
+                    const cellA = document.getElementById(`rec-a-${i}`);
+                    
+                    // Highlight D
+                    cellD.classList.add('bg-orange-500', 'text-white', 'scale-110');
+                    
+                    // Logic
+                    const prevSum = currentSum;
+                    currentSum += this.dataD[i];
+                    
+                    log.innerHTML = i===0 
+                        ? `A[0] = D[0] = ${currentSum}`
+                        : `A[${i}] = A[${i-1}] + D[${i}] = ${prevSum} + (${this.dataD[i]}) = ${currentSum}`;
+                    
+                    if(i > 0) {
+                         document.getElementById(`rec-a-${i-1}`).classList.add('bg-blue-100');
+                    }
+
+                    await this.wait(600);
+
+                    // Set A
+                    cellA.innerText = currentSum;
+                    cellA.className = "grid-cell bg-blue-100 border-blue-400 text-blue-700 font-bold scale-110 shadow-md";
+
+                    await this.wait(400);
+
+                    // Reset
+                    cellD.classList.remove('bg-orange-500', 'text-white', 'scale-110');
+                    if(i > 0) document.getElementById(`rec-a-${i-1}`).classList.remove('bg-blue-100');
+                    cellA.className = "grid-cell bg-white border-blue-200 text-blue-600 shadow-sm";
+                }
+
+                log.innerText = "還原完成！對差分做前綴和 = 原數列。";
+                this.isAnimating = false;
+            },
+
+            // --- TAB 3: Update ---
+
+            updateInputs(type, val) {
+                if(type === 'l') {
+                    if(val > this.r) { this.r = val; document.getElementById('val-r').innerText = val; document.querySelector('input[oninput*="\'r\'"]').value = val; }
+                    this.l = parseInt(val);
+                    document.getElementById('val-l').innerText = val;
+                }
+                if(type === 'r') {
+                    if(val < this.l) { this.l = val; document.getElementById('val-l').innerText = val; document.querySelector('input[oninput*="\'l\'"]').value = val; }
+                    this.r = parseInt(val);
+                    document.getElementById('val-r').innerText = val;
+                }
+                if(type === 'v') {
+                    this.v = parseInt(val);
+                    document.getElementById('val-v').innerText = val;
+                }
+                if(!this.isAnimating) this.renderTab3(); // Live update visuals if not animating
+            },
+
+            renderTab3() {
+                // Initial D
+                this.dataD = [];
+                for(let i=0; i<this.dataA.length; i++) {
+                    const prev = i===0 ? 0 : this.dataA[i-1];
+                    this.dataD.push(this.dataA[i] - prev);
+                }
+
+                // Add padding dummy cell for R+1 if R is last element
+                const displayD = [...this.dataD];
+                if(displayD.length <= this.dataA.length) displayD.push(0); // For D[N] visualization
+
+                const updD = document.getElementById('upd-arr-d');
+                updD.innerHTML = displayD.map((v, i) => 
+                    `<div class="flex flex-col items-center gap-1">
+                        <div class="text-[10px] ${i >= this.dataA.length ? 'text-slate-200' : 'text-slate-300'} font-mono">${i}</div>
+                        <div id="upd-d-${i}" class="grid-cell ${i >= this.dataA.length ? 'border-dashed border-slate-200 text-slate-300' : 'bg-white border-orange-200 text-orange-600'} shadow-sm">
+                            ${v}
+                        </div>
+                    </div>`
+                ).join('');
+
+                const updA = document.getElementById('upd-arr-a');
+                updA.innerHTML = this.dataA.map((v, i) => 
+                    `<div class="flex flex-col items-center gap-1">
+                        <div class="text-[10px] text-slate-300 font-mono">${i}</div>
+                        <div id="upd-a-${i}" class="grid-cell bg-white border-blue-200 text-blue-600 shadow-sm">${v}</div>
+                    </div>`
+                ).join('');
+                
+                document.getElementById('upd-log').innerText = `準備將區間 [${this.l}, ${this.r}] 的值增加 ${this.v}...`;
+            },
+
+            async animUpdate() {
+                if(this.isAnimating) return;
+                this.isAnimating = true;
+                this.renderTab3(); // Reset state
+
+                const log = document.getElementById('upd-log');
+                const L = this.l;
+                const R = this.r;
+                const V = this.v;
+
+                // Step 1: D[L] += V
+                log.innerHTML = `步驟 1: <span class="text-green-600 font-bold">D[${L}] += ${V}</span>`;
+                const cellL = document.getElementById(`upd-d-${L}`);
+                cellL.classList.add('bg-green-500', 'text-white', 'border-green-600', 'scale-110');
+                await this.wait(800);
+                
+                // Update Value
+                let valL = parseInt(cellL.innerText);
+                cellL.innerText = valL + V;
+                await this.wait(400);
+                cellL.classList.remove('bg-green-500', 'text-white', 'border-green-600', 'scale-110');
+                cellL.classList.add('bg-green-100', 'text-green-700', 'border-green-300'); // Leave a mark
+
+                // Step 2: D[R+1] -= V
+                const nextIdx = R + 1;
+                log.innerHTML += `<br>步驟 2: <span class="text-red-500 font-bold">D[${nextIdx}] -= ${V}</span> (抵銷)`;
+                const cellR1 = document.getElementById(`upd-d-${nextIdx}`);
+                cellR1.classList.add('bg-red-500', 'text-white', 'border-red-600', 'scale-110');
+                await this.wait(800);
+
+                // Update Value
+                let valR1 = parseInt(cellR1.innerText);
+                cellR1.innerText = valR1 - V;
+                await this.wait(400);
+                cellR1.classList.remove('bg-red-500', 'text-white', 'border-red-600', 'scale-110');
+                cellR1.classList.add('bg-red-100', 'text-red-700', 'border-red-300'); // Leave a mark
+
+                // Step 3: Reconstruct A
+                log.innerHTML += `<br>步驟 3: 自動還原 A (前綴和)...`;
+                await this.wait(500);
+
+                // Reconstruct Animation loop
+                let currentSum = 0;
+                // Get fresh D values from DOM
+                const freshD = [];
+                const domD = document.getElementById('upd-arr-d').children;
+                for(let i=0; i<domD.length; i++) freshD.push(parseInt(domD[i].querySelector('.grid-cell').innerText));
+
+                for(let i=0; i<this.dataA.length; i++) {
+                    currentSum += freshD[i];
+                    
+                    const cellA = document.getElementById(`upd-a-${i}`);
+                    const oldVal = parseInt(cellA.innerText);
+                    cellA.innerText = currentSum;
+
+                    // Highlight changed values
+                    if(currentSum !== oldVal) {
+                        cellA.classList.remove('bg-white', 'border-blue-200', 'text-blue-600');
+                        cellA.classList.add('bg-purple-100', 'border-purple-400', 'text-purple-700', 'scale-110', 'font-bold');
+                    } else {
+                        cellA.classList.add('opacity-50'); // Dim unchanged
+                    }
+                    await this.wait(150); // Fast ripple
+                }
+
+                log.innerHTML += `<br><span class="text-purple-600 font-bold">完成！只有 [${L}~${R}] 區間內的數值增加了 ${V}。</span>`;
+                this.isAnimating = false;
+            }
+        };
+
+        app.init();
+    </script>
+</body>
+</html>

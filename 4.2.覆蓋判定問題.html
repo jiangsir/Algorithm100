@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>基地台訊號覆蓋 (Base Station Coverage) - 區間合併</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .transition-all-800 { transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1); }
+        .fade-in { animation: fadeIn 0.5s forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* 基地台區塊樣式 */
+        .station-bar {
+            position: absolute;
+            height: 36px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-family: monospace;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: all 0.8s ease-in-out;
+            border: 2px solid transparent;
+            font-size: 0.85rem;
+            z-index: 10;
+        }
+        
+        /* 狀態樣式 */
+        .station-bar.merging {
+            background-color: #3b82f6 !important; /* blue-500 */
+            border-color: #1d4ed8;
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.6);
+            z-index: 30;
+        }
+        .station-bar.merged-into {
+            opacity: 0;
+            transform: scale(0.8) translateY(-20px);
+        }
+        .station-bar.final {
+            background-color: #10b981 !important; /* emerald-500 */
+            border-color: #059669;
+            z-index: 20;
+        }
+        .station-bar.scanning {
+            border-color: #f59e0b; /* amber-500 */
+            box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.3);
+            z-index: 40;
+        }
+
+        /* 覆蓋結果條 */
+        .coverage-result-bar {
+            position: absolute;
+            bottom: 60px;
+            height: 12px;
+            background-color: #10b981;
+            border-radius: 6px;
+            opacity: 0.8;
+            transition: width 0.5s, left 0.5s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        /* 時間軸 */
+        .axis-line {
+            position: absolute;
+            bottom: 40px;
+            left: 20px;
+            right: 20px;
+            height: 2px;
+            background-color: #94a3b8;
+        }
+        .tick {
+            position: absolute;
+            top: -4px;
+            width: 2px;
+            height: 8px;
+            background-color: #94a3b8;
+        }
+        .tick-label {
+            position: absolute;
+            top: 12px;
+            transform: translateX(-50%);
+            font-size: 10px;
+            color: #64748b;
+            font-family: monospace;
+        }
+
+        /* 掃描線 */
+        .sweep-line {
+            position: absolute;
+            top: 0; bottom: 40px;
+            width: 2px;
+            background-color: #f59e0b;
+            z-index: 50;
+            display: none;
+            border-right: 1px dashed rgba(245, 158, 11, 0.5);
+            transition: left 0.5s ease-out;
+        }
+        .sweep-badge {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #f59e0b;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: bold;
+            white-space: nowrap;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        /* 塔圖示 */
+        .tower-icon {
+            position: absolute;
+            bottom: 45px;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: end;
+            color: #64748b;
+            transition: all 0.5s;
+        }
+        .tower-icon.active { color: #3b82f6; transform: scale(1.2); }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans text-slate-800 flex flex-col">
+
+    <!-- Header -->
+    <nav class="bg-white border-b border-slate-200 px-6 py-4 shadow-sm sticky top-0 z-50">
+        <div class="max-w-5xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+            <h1 class="text-xl font-bold text-slate-900 flex items-center gap-2">
+                <svg class="text-blue-600" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5"/><path d="M8.5 8.5a4 4 0 0 1 7 7"/><path d="M12 12h.01"/></svg>
+                基地台覆蓋判定 (Interval Coverage)
+            </h1>
+            <div class="flex bg-slate-100 p-1 rounded-lg">
+                <button onclick="app.loadCase(1)" id="btn-case-1" class="px-4 py-1.5 rounded-md text-sm font-bold bg-white shadow-sm text-blue-600 transition-all">測試資料 1 (連續)</button>
+                <button onclick="app.loadCase(2)" id="btn-case-2" class="px-4 py-1.5 rounded-md text-sm font-bold text-slate-500 hover:text-slate-700 transition-all">測試資料 2 (斷訊)</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-grow p-4 md:p-8 max-w-5xl mx-auto w-full space-y-6">
+
+        <!-- Solution Card -->
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <h2 class="text-lg font-bold text-slate-800 mb-4 border-l-4 border-blue-500 pl-3">解題策略：排序 & 合併 (Sort & Merge)</h2>
+            
+            <div class="grid md:grid-cols-2 gap-8">
+                <div class="space-y-4">
+                    <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                        <h3 class="font-bold text-slate-700 text-sm mb-1 flex items-center gap-2">
+                            <span class="bg-blue-100 text-blue-700 w-5 h-5 rounded-full flex items-center justify-center text-xs">1</span>
+                            排序 (Sorting)
+                        </h3>
+                        <p class="text-xs text-slate-500 leading-relaxed">
+                            依照訊號的<span class="text-blue-600 font-bold">左端點 (Start)</span> 由小到大排序。確保我們是由左往右處理訊號。
+                        </p>
+                    </div>
+                    
+                    <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                        <h3 class="font-bold text-slate-700 text-sm mb-1 flex items-center gap-2">
+                            <span class="bg-green-100 text-green-700 w-5 h-5 rounded-full flex items-center justify-center text-xs">2</span>
+                            掃描與合併 (Sweep & Merge)
+                        </h3>
+                        <p class="text-xs text-slate-500 leading-relaxed mb-2">
+                            維護一個當前覆蓋區間 <code class="font-mono bg-white px-1 border">[L, R]</code>。對於下一個訊號 <code class="font-mono bg-white px-1 border">[start, end]</code>：
+                        </p>
+                        <ul class="text-xs text-slate-500 space-y-1 list-disc list-inside ml-1">
+                            <li>若 <code class="text-green-600 font-bold">start <= R</code>：重疊！更新 <code class="font-mono">R = max(R, end)</code> (延長訊號)。</li>
+                            <li>若 <code class="text-red-500 font-bold">start > R</code>：斷訊！結算當前區間，開始新區間。</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Controls -->
+                <div class="flex flex-col justify-center gap-4 border-l border-slate-100 pl-6">
+                    <div class="text-center mb-2">
+                        <span class="text-xs font-bold text-slate-400 uppercase">當前狀態</span>
+                        <div id="step-desc" class="font-bold text-lg text-slate-700 h-14 flex items-center justify-center">載入資料中...</div>
+                    </div>
+                    
+                    <!-- Stats Display -->
+                    <div class="grid grid-cols-2 gap-2 mb-2">
+                        <div class="bg-slate-50 p-2 rounded text-center">
+                            <div class="text-[10px] text-slate-400">總覆蓋長度</div>
+                            <div id="total-len" class="text-xl font-bold text-green-600">0</div>
+                        </div>
+                        <div class="bg-slate-50 p-2 rounded text-center">
+                            <div class="text-[10px] text-slate-400">訊號段數</div>
+                            <div id="segment-count" class="text-xl font-bold text-blue-600">0</div>
+                        </div>
+                    </div>
+
+                    <button onclick="app.nextStep()" id="btn-next" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-md transition-all flex items-center justify-center gap-2 group">
+                        <span class="group-hover:scale-110 transition-transform">▶</span>
+                        下一步
+                    </button>
+                    <button onclick="app.reset()" class="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg font-bold text-sm transition-all">
+                        重置演示
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Visualization Canvas -->
+        <div class="bg-white rounded-2xl shadow-md border border-slate-200 relative h-[400px] select-none overflow-hidden" id="canvas-container">
+            
+            <div class="absolute top-4 left-4 text-xs font-bold text-slate-400 uppercase tracking-wider">訊號覆蓋範圍</div>
+
+            <!-- Axis -->
+            <div class="axis-line"></div>
+            <div id="axis-labels"></div>
+
+            <!-- Result Layer (Green Bars at bottom) -->
+            <div id="result-layer" class="absolute left-0 w-full h-full pointer-events-none"></div>
+
+            <!-- Towers Layer -->
+            <div id="towers-layer" class="absolute left-0 w-full h-full pointer-events-none"></div>
+
+            <!-- Stations Layer (Bars) -->
+            <div id="stations-layer" class="absolute top-0 left-0 w-full h-full"></div>
+
+            <!-- Sweep Line -->
+            <div id="sweep-line" class="sweep-line">
+                <div class="sweep-badge" id="sweep-text">Scan</div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <script>
+        const app = {
+            // Test Cases
+            cases: {
+                1: {
+                    // Continous coverage
+                    data: [[0, 10], [5, 20], [15, 30]], // 0-30
+                    scale: 35
+                },
+                2: {
+                    // Gap
+                    data: [[0, 10], [15, 25], [20, 30]], // 0-10, 15-30
+                    scale: 35
+                }
+            },
+
+            // State
+            currCase: 1,
+            step: 0, 
+            stations: [],
+            currentRange: null, // {start, end, element} representing the merging bar
+            totalLength: 0,
+            segCount: 0,
+            
+            init() {
+                this.loadCase(1);
+                window.addEventListener('resize', () => this.render());
+            },
+
+            loadCase(id) {
+                this.currCase = id;
+                this.step = 0;
+                this.currentRange = null;
+                this.totalLength = 0;
+                this.segCount = 0;
+                
+                // Colors
+                const colors = ['bg-indigo-400', 'bg-violet-400', 'bg-fuchsia-400', 'bg-pink-400'];
+                
+                // Map Data
+                this.stations = this.cases[id].data.map((m, i) => ({
+                    id: i,
+                    start: m[0],
+                    end: m[1],
+                    color: colors[i % colors.length],
+                    row: i,
+                    merged: false
+                }));
+
+                // UI Reset
+                this.updateButtons(id);
+                document.getElementById('sweep-line').style.display = 'none';
+                document.getElementById('step-desc').innerText = "載入原始資料 (未排序)";
+                document.getElementById('total-len').innerText = "0";
+                document.getElementById('segment-count').innerText = "0";
+                document.getElementById('result-layer').innerHTML = '';
+                
+                const btnNext = document.getElementById('btn-next');
+                btnNext.disabled = false;
+                btnNext.className = "w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-md transition-all flex items-center justify-center gap-2 group";
+                btnNext.innerHTML = `<span class="group-hover:scale-110 transition-transform">▶</span> 開始排序`;
+
+                this.render();
+            },
+
+            reset() {
+                this.loadCase(this.currCase);
+            },
+
+            nextStep() {
+                if (this.step === 0) {
+                    this.animSort();
+                } else if (this.step <= this.stations.length) {
+                    this.animMerge(this.step - 1);
+                }
+            },
+
+            async animSort() {
+                const btn = document.getElementById('btn-next');
+                btn.disabled = true; 
+                document.getElementById('step-desc').innerText = "步驟 1: 依照 [左端點] 進行排序...";
+
+                // Logic: Sort by start time
+                this.stations.sort((a, b) => a.start - b.start);
+                
+                // Update rows for visual transition
+                this.stations.forEach((m, idx) => {
+                    m.row = idx;
+                });
+
+                this.render(); // Trigger CSS transition
+
+                await this.wait(800); 
+
+                document.getElementById('step-desc').innerHTML = "排序完成。準備開始由左向右掃描。";
+                btn.disabled = false;
+                btn.innerHTML = `<span class="group-hover:scale-110 transition-transform">🔍</span> 處理第 1 個訊號`;
+                this.step = 1;
+            },
+
+            async animMerge(idx) {
+                const btn = document.getElementById('btn-next');
+                btn.disabled = true;
+
+                // Handle End of List
+                if (idx >= this.stations.length) {
+                    this.finalize();
+                    return;
+                }
+
+                const currStation = this.stations[idx];
+                const domStation = document.getElementById(`station-${currStation.id}`);
+                const domTower = document.getElementById(`tower-${currStation.id}`);
+
+                // Move Sweep Line
+                const container = document.getElementById('canvas-container');
+                const width = container.clientWidth - 40;
+                const maxVal = this.cases[this.currCase].scale;
+                const pxPerUnit = width / maxVal;
+                
+                const sweepLine = document.getElementById('sweep-line');
+                const sweepText = document.getElementById('sweep-text');
+                sweepLine.style.display = 'block';
+                sweepLine.style.left = (20 + currStation.start * pxPerUnit) + 'px';
+                
+                // Highlight Current
+                domStation.classList.add('scanning');
+                if(domTower) domTower.classList.add('active');
+
+                await this.wait(500);
+
+                // Logic
+                if (this.currentRange === null) {
+                    // First element
+                    document.getElementById('step-desc').innerHTML = `初始化: 當前覆蓋區間 <span class="text-blue-600 font-bold">[${currStation.start}, ${currStation.end}]</span>`;
+                    
+                    // Create the "Merging Bar" visually
+                    this.createMergeBar(currStation.start, currStation.end, pxPerUnit);
+                    
+                    // Mark original as processed (fade out)
+                    domStation.classList.add('merged-into');
+                    
+                } else {
+                    // Compare with currentRange
+                    sweepText.innerText = `Check ${currStation.start}`;
+                    
+                    if (currStation.start <= this.currentRange.end) {
+                        // Overlap -> Merge
+                        const oldEnd = this.currentRange.end;
+                        const newEnd = Math.max(oldEnd, currStation.end);
+                        
+                        document.getElementById('step-desc').innerHTML = `<span class="text-blue-600 font-bold">重疊 (Overlap)</span>: ${currStation.start} <= ${oldEnd}。<br>延長區間至 ${newEnd}。`;
+                        
+                        // Animate extension
+                        this.updateMergeBar(newEnd, pxPerUnit);
+                        this.currentRange.end = newEnd;
+                        
+                        domStation.classList.add('merged-into');
+
+                    } else {
+                        // Gap -> Finalize previous, start new
+                        document.getElementById('step-desc').innerHTML = `<span class="text-red-500 font-bold">斷訊 (Gap)</span>: ${currStation.start} > ${this.currentRange.end}。<br>結算上一段，開始新區間。`;
+                        
+                        // Finalize visual
+                        this.commitMergeBar();
+                        
+                        await this.wait(500);
+                        
+                        // Start new
+                        this.createMergeBar(currStation.start, currStation.end, pxPerUnit);
+                        domStation.classList.add('merged-into');
+                    }
+                }
+
+                this.step++;
+                btn.disabled = false;
+                
+                if (this.step <= this.stations.length) {
+                    btn.innerHTML = `<span class="group-hover:scale-110 transition-transform">🔍</span> 處理第 ${this.step} 個訊號`;
+                } else {
+                    btn.innerHTML = "🏁 完成結算";
+                }
+            },
+
+            createMergeBar(start, end, pxPerUnit) {
+                this.currentRange = { start, end };
+                
+                const bar = document.createElement('div');
+                bar.className = 'station-bar merging';
+                bar.style.left = (20 + start * pxPerUnit) + 'px';
+                bar.style.width = ((end - start) * pxPerUnit) + 'px';
+                bar.style.top = '180px'; // Center position
+                bar.innerText = `[${start}, ${end}]`;
+                bar.id = 'active-merge-bar';
+                
+                document.getElementById('stations-layer').appendChild(bar);
+            },
+
+            updateMergeBar(newEnd, pxPerUnit) {
+                const bar = document.getElementById('active-merge-bar');
+                bar.style.width = ((newEnd - this.currentRange.start) * pxPerUnit) + 'px';
+                bar.innerText = `[${this.currentRange.start}, ${newEnd}]`;
+            },
+
+            commitMergeBar() {
+                const bar = document.getElementById('active-merge-bar');
+                if(!bar) return;
+                
+                bar.id = ''; // Remove ID
+                bar.classList.remove('merging');
+                bar.classList.add('final');
+                
+                // Add to result layer at bottom
+                const resultBar = bar.cloneNode(true);
+                resultBar.className = 'coverage-result-bar';
+                resultBar.innerText = ''; // No text for result bar
+                resultBar.style.top = ''; // Remove top
+                // style is handled by css class .coverage-result-bar (bottom: 60px)
+                document.getElementById('result-layer').appendChild(resultBar);
+                
+                // Fade out the active bar in center
+                bar.style.opacity = '0';
+                setTimeout(() => bar.remove(), 500);
+
+                // Update Stats
+                const len = this.currentRange.end - this.currentRange.start;
+                this.totalLength += len;
+                this.segCount += 1;
+                
+                document.getElementById('total-len').innerText = this.totalLength;
+                document.getElementById('segment-count').innerText = this.segCount;
+            },
+
+            finalize() {
+                this.commitMergeBar(); // Commit last one
+                
+                const btn = document.getElementById('btn-next');
+                btn.disabled = true;
+                btn.className = "w-full py-3 bg-slate-600 text-white rounded-xl font-bold opacity-80 cursor-not-allowed";
+                btn.innerHTML = "演示結束";
+                
+                document.getElementById('sweep-line').style.display = 'none';
+                document.getElementById('step-desc').innerHTML = `<span class="text-green-600 font-bold">判定完成！</span> 總覆蓋長度: ${this.totalLength}`;
+            },
+
+            render() {
+                const container = document.getElementById('stations-layer');
+                const axis = document.getElementById('axis-labels');
+                const towers = document.getElementById('towers-layer');
+                
+                // Only full re-render if step 0, else just position updates
+                if(this.step > 0 && this.step <= 1) {
+                    // During Sort, we need to update positions
+                } else if (this.step > 1) {
+                    // Don't nuke everything during merge animation
+                    return; 
+                }
+
+                container.innerHTML = '';
+                axis.innerHTML = '';
+                towers.innerHTML = '';
+
+                const width = document.getElementById('canvas-container').clientWidth - 40;
+                const maxVal = this.cases[this.currCase].scale;
+                const pxPerUnit = width / maxVal;
+                const rowHeight = 50; 
+
+                // Render Stations
+                this.stations.forEach((m) => {
+                    // Bar
+                    const el = document.createElement('div');
+                    el.id = `station-${m.id}`;
+                    el.className = `station-bar ${m.color}`;
+                    el.style.left = (20 + m.start * pxPerUnit) + 'px';
+                    el.style.width = Math.max(4, ((m.end - m.start) * pxPerUnit)) + 'px';
+                    el.style.top = (30 + m.row * rowHeight) + 'px'; 
+                    el.innerHTML = `<span class="mr-2 opacity-50 text-xs">#${m.id}</span> ${m.start}-${m.end}`;
+                    container.appendChild(el);
+
+                    // Tower Icon
+                    const tower = document.createElement('div');
+                    tower.id = `tower-${m.id}`;
+                    tower.className = 'tower-icon';
+                    tower.style.left = (20 + m.start * pxPerUnit) + 'px'; // At start point
+                    tower.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5"/><path d="M12 12v9"/><path d="M8 21h8"/></svg>`;
+                    towers.appendChild(tower);
+                });
+
+                // Render Axis
+                for (let i = 0; i <= maxVal; i += 5) {
+                    const left = 20 + i * pxPerUnit;
+                    const label = document.createElement('div');
+                    label.className = 'tick-label';
+                    label.style.left = left + 'px';
+                    label.innerText = i;
+                    axis.appendChild(label);
+                    
+                    const tick = document.createElement('div');
+                    tick.className = 'tick';
+                    tick.style.left = left + 'px';
+                    document.querySelector('.axis-line').appendChild(tick);
+                }
+            },
+
+            updateButtons(id) {
+                const btn1 = document.getElementById('btn-case-1');
+                const btn2 = document.getElementById('btn-case-2');
+                const active = "px-4 py-1.5 rounded-md text-sm font-bold bg-white shadow-sm text-blue-600 transition-all ring-2 ring-blue-100";
+                const inactive = "px-4 py-1.5 rounded-md text-sm font-bold text-slate-500 hover:text-slate-700 transition-all hover:bg-slate-200";
+                btn1.className = id === 1 ? active : inactive;
+                btn2.className = id === 2 ? active : inactive;
+            },
+
+            wait(ms) { return new Promise(r => setTimeout(r, ms)); }
+        };
+
+        app.init();
+    </script>
+</body>
+</html>

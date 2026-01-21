@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>掃描線演算法 (Scanline Algorithm) 視覺化</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .transition-all-500 { transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+        .rect {
+            position: absolute;
+            opacity: 0.3;
+            border: 2px solid;
+            transition: all 0.3s;
+        }
+        .scan-line {
+            position: absolute;
+            top: 0; bottom: 0;
+            width: 2px;
+            background-color: #ef4444; /* red-500 */
+            z-index: 20;
+            transition: left 0.8s ease-in-out;
+            box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+        }
+        .swept-area {
+            position: absolute;
+            background-color: rgba(239, 68, 68, 0.2);
+            border-right: 1px dashed rgba(239, 68, 68, 0.4);
+            z-index: 10;
+            transition: width 0.8s ease-in-out;
+        }
+        .active-segment {
+            position: absolute;
+            width: 6px;
+            left: -2px;
+            background-color: #ef4444;
+            border-radius: 4px;
+            z-index: 30;
+            transition: all 0.3s;
+        }
+        .event-marker {
+            position: absolute;
+            bottom: -24px;
+            transform: translateX(-50%);
+            font-size: 10px;
+            color: #64748b;
+            transition: color 0.3s;
+        }
+        .event-marker.active {
+            color: #ef4444;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans text-slate-800 flex flex-col">
+
+    <!-- Header -->
+    <nav class="bg-white border-b border-slate-200 px-6 py-4 shadow-sm">
+        <div class="max-w-4xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+            <h1 class="text-xl font-bold text-slate-900 flex items-center gap-2">
+                <svg class="text-red-500" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
+                掃描線演算法 (Scanline Algorithm)
+            </h1>
+            <div class="flex items-center gap-2">
+                <span class="text-sm text-slate-500 bg-slate-100 px-3 py-1 rounded-full">應用：矩形覆蓋面積</span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main -->
+    <main class="flex-grow p-4 md:p-8 max-w-4xl mx-auto w-full space-y-6">
+
+        <!-- Explanation Card -->
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <h2 class="text-lg font-bold text-slate-800 mb-2 border-l-4 border-red-500 pl-3">核心觀念</h2>
+            <p class="text-slate-600 text-sm leading-relaxed mb-4">
+                想像一條紅色的線從左向右掃描。我們不需要計算每個像素，只需要關注矩形的<span class="font-bold text-blue-600">左邊界 (進入)</span> 和 <span class="font-bold text-orange-600">右邊界 (離開)</span>。
+                <br>
+                在任何兩個邊界之間，Y 軸上的有效長度是固定的。
+                <br>
+                <code class="bg-slate-100 px-1 rounded font-mono text-red-600 font-bold">增加面積 = (當前 X - 上次 X) × Y 軸有效長度</code>
+            </p>
+            <div class="flex gap-4">
+                <button onclick="app.nextStep()" id="btn-next" class="px-6 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-bold shadow-md transition-all flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    下一步
+                </button>
+                <button onclick="app.reset()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold transition-all">
+                    重置
+                </button>
+            </div>
+        </div>
+
+        <!-- Visualization Area -->
+        <div class="grid lg:grid-cols-3 gap-6">
+            
+            <!-- Canvas -->
+            <div class="lg:col-span-2 bg-white rounded-2xl shadow-md border border-slate-200 relative h-[400px] overflow-hidden select-none" id="canvas-container">
+                <!-- Background Grid -->
+                <div class="absolute inset-0" style="background-image: radial-gradient(#cbd5e1 1px, transparent 1px); background-size: 20px 20px; opacity: 0.5;"></div>
+                
+                <!-- Coordinate Labels -->
+                <div class="absolute bottom-2 left-2 text-xs text-slate-400">X -></div>
+                <div class="absolute top-2 left-2 text-xs text-slate-400">Y |</div>
+
+                <!-- Elements (Injected by JS) -->
+                <div id="rects-layer"></div>
+                <div id="swept-layer"></div>
+                <div id="scanline" class="scan-line" style="left: 0px;">
+                    <!-- Active segments on the line -->
+                    <div id="active-segments-container"></div>
+                </div>
+                
+                <!-- X-Axis Markers -->
+                <div id="markers-layer" class="absolute bottom-0 w-full h-8 pointer-events-none"></div>
+            </div>
+
+            <!-- Dashboard -->
+            <div class="flex flex-col gap-4">
+                <!-- Status Panel -->
+                <div class="bg-slate-800 p-5 rounded-2xl text-white shadow-lg flex-grow flex flex-col">
+                    <div class="flex justify-between items-center border-b border-slate-600 pb-3 mb-3">
+                        <span class="text-xs font-bold text-slate-400 uppercase">當前狀態</span>
+                        <span class="text-xs font-mono bg-slate-700 px-2 py-1 rounded text-red-300" id="step-counter">Step 0 / 6</span>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div>
+                            <div class="text-[10px] text-slate-400 uppercase mb-1">掃描線位置 (X)</div>
+                            <div class="text-2xl font-mono font-bold text-white" id="val-x">0</div>
+                        </div>
+
+                        <div>
+                            <div class="text-[10px] text-slate-400 uppercase mb-1">Y 軸有效覆蓋長度 (H)</div>
+                            <div class="text-2xl font-mono font-bold text-yellow-400" id="val-h">0</div>
+                            <div class="text-xs text-slate-500 mt-1">目前掃描線切到的矩形高度總和</div>
+                        </div>
+
+                        <div class="pt-4 border-t border-slate-600">
+                            <div class="text-[10px] text-slate-400 uppercase mb-1">移動距離 (dX)</div>
+                            <div class="font-mono text-slate-300 text-sm mb-2" id="calc-dx">0</div>
+                            
+                            <div class="text-[10px] text-slate-400 uppercase mb-1">本次增加面積 (+Area)</div>
+                            <div class="font-mono text-green-400 font-bold text-lg mb-2" id="calc-area">+ 0</div>
+                        </div>
+                    </div>
+
+                    <div class="mt-auto pt-4 border-t border-slate-600">
+                        <div class="flex justify-between items-end">
+                            <span class="text-sm font-bold text-slate-300">總面積</span>
+                            <span class="text-3xl font-mono font-bold text-white" id="val-total">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Active Segments List -->
+                <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm h-48 overflow-y-auto">
+                    <div class="text-xs font-bold text-slate-400 uppercase mb-2 sticky top-0 bg-white pb-2 border-b">Y 軸區間 (Active Intervals)</div>
+                    <div id="intervals-list" class="space-y-2 text-sm font-mono">
+                        <div class="text-slate-400 italic text-xs">無活動區間</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        const app = {
+            // Configuration
+            width: 0,
+            height: 400,
+            scaleX: 1, // Will be calculated
+            padding: 50,
+
+            // Data: 3 Overlapping Rectangles
+            rects: [
+                { id: 1, x1: 50, y1: 50, x2: 200, y2: 200, color: 'border-blue-500 bg-blue-500' },
+                { id: 2, x1: 150, y1: 120, x2: 300, y2: 280, color: 'border-orange-500 bg-orange-500' },
+                { id: 3, x1: 250, y1: 80, x2: 350, y2: 180, color: 'border-purple-500 bg-purple-500' }
+            ],
+
+            // State
+            events: [],
+            currentStep: -1,
+            totalArea: 0,
+            activeIntervals: [], // List of [y1, y2]
+            
+            init() {
+                const container = document.getElementById('canvas-container');
+                this.width = container.clientWidth;
+                
+                // Prepare Data
+                this.generateEvents();
+                this.renderStatic();
+                this.updateUI();
+
+                // Handle resize
+                window.addEventListener('resize', () => {
+                    this.width = container.clientWidth;
+                    this.renderStatic();
+                    if(this.currentStep >= 0) this.animateToStep(this.currentStep, false);
+                });
+            },
+
+            generateEvents() {
+                // Event: { x, type: 1(start)|-1(end), y1, y2, id }
+                this.events = [];
+                this.rects.forEach(r => {
+                    this.events.push({ x: r.x1, type: 1, y1: r.y1, y2: r.y2, id: r.id });
+                    this.events.push({ x: r.x2, type: -1, y1: r.y1, y2: r.y2, id: r.id });
+                });
+                // Sort by X
+                this.events.sort((a, b) => a.x - b.x);
+            },
+
+            renderStatic() {
+                const layer = document.getElementById('rects-layer');
+                const markers = document.getElementById('markers-layer');
+                layer.innerHTML = '';
+                markers.innerHTML = '';
+
+                // Draw Rectangles
+                this.rects.forEach(r => {
+                    const el = document.createElement('div');
+                    el.className = `rect ${r.color}`;
+                    el.style.left = r.x1 + 'px';
+                    el.style.top = r.y1 + 'px';
+                    el.style.width = (r.x2 - r.x1) + 'px';
+                    el.style.height = (r.y2 - r.y1) + 'px';
+                    layer.appendChild(el);
+                });
+
+                // Draw Event Markers
+                this.events.forEach((e, idx) => {
+                    const el = document.createElement('div');
+                    el.className = `event-marker`;
+                    el.style.left = e.x + 'px';
+                    el.innerText = e.x;
+                    el.id = `marker-${idx}`;
+                    markers.appendChild(el);
+                });
+            },
+
+            calculateCoveredLength() {
+                if (this.activeIntervals.length === 0) return 0;
+                
+                // Sort intervals by y1
+                let sorted = [...this.activeIntervals].sort((a, b) => a[0] - b[0]);
+                
+                let covered = 0;
+                let currentY1 = sorted[0][0];
+                let currentY2 = sorted[0][1];
+
+                for (let i = 1; i < sorted.length; i++) {
+                    if (sorted[i][0] < currentY2) {
+                        // Overlap, extend end if needed
+                        currentY2 = Math.max(currentY2, sorted[i][1]);
+                    } else {
+                        // Disjoint, add current and start new
+                        covered += currentY2 - currentY1;
+                        currentY1 = sorted[i][0];
+                        currentY2 = sorted[i][1];
+                    }
+                }
+                covered += currentY2 - currentY1; // Add last one
+                return covered;
+            },
+
+            renderActiveSegments() {
+                // Visualizes the "merged" intervals on the scanline
+                const container = document.getElementById('active-segments-container');
+                container.innerHTML = '';
+                
+                if (this.activeIntervals.length === 0) return;
+
+                let sorted = [...this.activeIntervals].sort((a, b) => a[0] - b[0]);
+                let merged = [];
+                if(sorted.length > 0) {
+                    let curr = sorted[0];
+                    for(let i=1; i<sorted.length; i++) {
+                        if(sorted[i][0] < curr[1]) {
+                            curr[1] = Math.max(curr[1], sorted[i][1]);
+                        } else {
+                            merged.push(curr);
+                            curr = sorted[i];
+                        }
+                    }
+                    merged.push(curr);
+                }
+
+                merged.forEach(m => {
+                    const el = document.createElement('div');
+                    el.className = 'active-segment';
+                    el.style.top = m[0] + 'px';
+                    el.style.height = (m[1] - m[0]) + 'px';
+                    container.appendChild(el);
+                });
+            },
+
+            updateIntervalsList() {
+                const list = document.getElementById('intervals-list');
+                if (this.activeIntervals.length === 0) {
+                    list.innerHTML = '<div class="text-slate-400 italic text-xs">無活動區間</div>';
+                    return;
+                }
+                list.innerHTML = this.activeIntervals.map(i => `
+                    <div class="flex items-center gap-2 bg-slate-50 p-1 rounded border border-slate-100">
+                        <div class="w-2 h-2 rounded-full bg-red-500"></div>
+                        <span>Y: [${i[0]}, ${i[1]}]</span>
+                    </div>
+                `).join('');
+            },
+
+            nextStep() {
+                if (this.currentStep < this.events.length - 1) {
+                    this.currentStep++;
+                    this.animateToStep(this.currentStep, true);
+                } else {
+                    // Finished
+                    document.getElementById('btn-next').innerText = '演示結束 (重置)';
+                    document.getElementById('btn-next').onclick = () => this.reset();
+                    document.getElementById('btn-next').classList.replace('bg-red-500', 'bg-slate-700');
+                    document.getElementById('btn-next').classList.replace('hover:bg-red-600', 'hover:bg-slate-800');
+                }
+            },
+
+            reset() {
+                this.currentStep = -1;
+                this.totalArea = 0;
+                this.activeIntervals = [];
+                
+                // Clear Visuals
+                document.getElementById('swept-layer').innerHTML = '';
+                document.getElementById('scanline').style.left = '0px';
+                document.getElementById('active-segments-container').innerHTML = '';
+                
+                // Reset UI Text
+                this.updateUIValues(0, 0, 0, 0, 0);
+                this.updateIntervalsList();
+                
+                // Reset Button
+                const btn = document.getElementById('btn-next');
+                btn.innerText = '下一步';
+                btn.onclick = () => this.nextStep();
+                btn.className = "px-6 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-bold shadow-md transition-all flex items-center gap-2";
+                
+                // Markers
+                document.querySelectorAll('.event-marker').forEach(el => el.classList.remove('active'));
+            },
+
+            animateToStep(stepIndex, animate) {
+                const event = this.events[stepIndex];
+                const prevEvent = stepIndex > 0 ? this.events[stepIndex - 1] : { x: 0 };
+                
+                // 1. Move Scanline
+                const line = document.getElementById('scanline');
+                line.style.transition = animate ? 'left 0.8s ease-in-out' : 'none';
+                line.style.left = event.x + 'px';
+
+                // Highlight Marker
+                document.querySelectorAll('.event-marker').forEach(el => el.classList.remove('active'));
+                document.getElementById(`marker-${stepIndex}`).classList.add('active');
+
+                // 2. Calculate Area added from prevEvent to current Event
+                const dx = event.x - prevEvent.x;
+                const activeHeight = this.calculateCoveredLength();
+                const addedArea = dx * activeHeight;
+                
+                if (stepIndex > 0 && addedArea > 0) {
+                    // Visualise the added area strip
+                    const strip = document.createElement('div');
+                    strip.className = 'swept-area';
+                    strip.style.left = prevEvent.x + 'px';
+                    strip.style.width = dx + 'px';
+                    strip.style.height = '100%'; // Simplification: we just fill height, concept is area
+                    // Actually, to be accurate visually, we should only highlight the Active Y parts.
+                    // But for simple "Swept Area" visualization, a full strip is often less cluttered,
+                    // OR we draw rectangles for the active segments. Let's do rects for active segments for accuracy.
+                    
+                    // Clear simple strip, generate accurate strips
+                    const container = document.getElementById('swept-layer');
+                    
+                    // Merge active intervals for drawing
+                    let sorted = [...this.activeIntervals].sort((a, b) => a[0] - b[0]);
+                    if (sorted.length > 0) {
+                        let merged = [];
+                        let curr = [...sorted[0]];
+                        for(let i=1; i<sorted.length; i++) {
+                            if(sorted[i][0] < curr[1]) {
+                                curr[1] = Math.max(curr[1], sorted[i][1]);
+                            } else {
+                                merged.push(curr);
+                                curr = [...sorted[i]];
+                            }
+                        }
+                        merged.push(curr);
+
+                        merged.forEach(m => {
+                            const rect = document.createElement('div');
+                            rect.className = 'swept-area';
+                            rect.style.left = prevEvent.x + 'px';
+                            rect.style.width = dx + 'px';
+                            rect.style.top = m[0] + 'px';
+                            rect.style.height = (m[1] - m[0]) + 'px';
+                            container.appendChild(rect);
+                        });
+                    }
+                }
+
+                this.totalArea += addedArea;
+
+                // 3. Process Event (Update Active Intervals for NEXT step)
+                if (event.type === 1) {
+                    // Add Interval
+                    this.activeIntervals.push([event.y1, event.y2]);
+                } else {
+                    // Remove Interval - remove matching [y1, y2]
+                    const idx = this.activeIntervals.findIndex(i => i[0] === event.y1 && i[1] === event.y2);
+                    if (idx > -1) this.activeIntervals.splice(idx, 1);
+                }
+
+                // 4. Update UI (Delayed to sync with animation end)
+                if (animate) {
+                    setTimeout(() => {
+                        this.updateUIValues(event.x, activeHeight, dx, addedArea, this.totalArea);
+                        this.renderActiveSegments(); // Update visual segments on line
+                        this.updateIntervalsList();
+                    }, 800);
+                } else {
+                    this.updateUIValues(event.x, activeHeight, dx, addedArea, this.totalArea);
+                    this.renderActiveSegments();
+                    this.updateIntervalsList();
+                }
+            },
+
+            updateUIValues(x, h, dx, add, total) {
+                document.getElementById('step-counter').innerText = `Step ${this.currentStep + 1} / ${this.events.length}`;
+                document.getElementById('val-x').innerText = x;
+                document.getElementById('val-h').innerText = h;
+                document.getElementById('calc-dx').innerText = `${x} - ${x-dx} = ${dx}`;
+                document.getElementById('calc-area').innerText = `+ ${add.toLocaleString()}`;
+                document.getElementById('val-total').innerText = total.toLocaleString();
+            },
+
+            updateUI() {
+                this.updateUIValues(0,0,0,0,0);
+            }
+        };
+
+        app.init();
+    </script>
+</body>
+</html>
